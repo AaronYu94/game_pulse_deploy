@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Profile · Game Pulse</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400;1,700&family=Teko:wght@300;400;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="shared.css?v=2">
+  <style>
+    /* ===== Profile hero ===== */
+    .profile-hero {
+      background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+      border: 1px solid var(--border);
+      padding: 28px 32px;
+      margin-bottom: 24px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+    .profile-hero::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent), var(--blue));
+    }
+    .profile-avatar {
+      width: 72px; height: 72px;
+      clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+      background: var(--accent);
+      display: flex; align-items: center; justify-content: center;
+      font-family: var(--f-display);
+      font-size: 28px;
+      color: #fff;
+      flex-shrink: 0;
+    }
+    .profile-hero__info { flex: 1; min-width: 0; }
+    .profile-hero__name {
+      font-family: var(--f-display);
+      font-size: 38px;
+      line-height: 1;
+      color: var(--text);
+    }
+    .profile-hero__title-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 6px;
+      padding: 3px 10px;
+      background: rgba(230,0,0,.12);
+      border: 1px solid rgba(230,0,0,.35);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--accent);
+      letter-spacing: .04em;
+    }
+    .profile-hero__joined {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 6px;
+    }
+    .profile-hero__coins {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+    }
+    .profile-hero__coins-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+    }
+    .profile-hero__coins-num {
+      font-family: var(--f-display);
+      font-size: 36px;
+      color: var(--accent);
+      line-height: 1;
+    }
+    .profile-hero__coins-sym {
+      font-family: var(--f-display);
+      font-size: 16px;
+      color: var(--accent);
+    }
+
+    /* Stat cards row */
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      padding: 14px 16px;
+    }
+    .stat-card__label {
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+      margin-bottom: 4px;
+    }
+    .stat-card__value {
+      font-family: var(--f-display);
+      font-size: 30px;
+      color: var(--text);
+      line-height: 1;
+    }
+    .stat-card__value.accent { color: var(--accent); }
+    .stat-card__value.green { color: #22c55e; }
+    .stat-card__value.blue { color: var(--blue); }
+
+    /* Section header */
+    .section-head {
+      font-family: var(--f-display);
+      font-size: 20px;
+      letter-spacing: .04em;
+      color: var(--text);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 10px;
+    }
+    .section-head::before {
+      content: '';
+      width: 4px; height: 20px;
+      background: var(--accent);
+      display: block;
+      flex-shrink: 0;
+    }
+
+    /* Bio editor */
+    .bio-section { margin-bottom: 24px; }
+    .bio-text {
+      font-size: 14px;
+      color: var(--text-sub);
+      line-height: 1.6;
+      margin-bottom: 8px;
+      min-height: 40px;
+    }
+    .bio-edit-row {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .bio-edit-row textarea {
+      flex: 1;
+      background: var(--bg-surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 13px;
+      font-family: var(--f-body);
+      resize: vertical;
+      min-height: 60px;
+    }
+    .bio-edit-row textarea:focus { outline: none; border-color: var(--accent); }
+    .bio-save-btn {
+      padding: 8px 18px;
+      background: var(--accent);
+      border: none;
+      color: #fff;
+      font-family: var(--f-display);
+      font-size: 14px;
+      cursor: pointer;
+      transition: opacity .15s;
+      flex-shrink: 0;
+    }
+    .bio-save-btn:hover { opacity: .85; }
+
+    /* Bet history table */
+    .bet-table-wrap { overflow-x: auto; border: 1px solid var(--border); margin-bottom: 24px; }
+    .bet-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .bet-table th {
+      padding: 8px 12px;
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .08em; color: var(--text-muted);
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      text-align: left;
+    }
+    .bet-table td {
+      padding: 8px 12px;
+      border-top: 1px solid var(--border);
+      color: var(--text-sub);
+    }
+    .bet-table tr:hover td { background: var(--bg-card-hover); }
+    .bet-status { font-size: 11px; font-weight: 700; padding: 2px 7px; border: 1px solid; }
+    .bet-status--won { color: #22c55e; border-color: rgba(34,197,94,.3); background: rgba(34,197,94,.08); }
+    .bet-status--lost { color: var(--heat); border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.08); }
+    .bet-status--pending { color: var(--blue); border-color: rgba(59,130,246,.3); background: rgba(59,130,246,.08); }
+
+    /* Topic rows */
+    .topic-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .topic-row:last-child { border-bottom: none; }
+    .topic-row__title {
+      flex: 1;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .topic-row__cat {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+      padding: 2px 7px; border: 1px solid var(--border); color: var(--text-muted);
+      flex-shrink: 0;
+    }
+    .topic-row__date { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+
+    /* Right panel */
+    .rp-section { padding: 16px; border-bottom: 1px solid var(--border); }
+    .rp-head {
+      font-family: var(--f-display); font-size: 14px; text-transform: uppercase;
+      letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 12px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .rp-head::before { content: ''; width: 3px; height: 14px; background: var(--accent); display: block; }
+
+    .rp-stat-row {
+      display: flex; justify-content: space-between;
+      padding: 6px 0; border-bottom: 1px solid var(--border);
+      font-size: 12px;
+    }
+    .rp-stat-row:last-child { border-bottom: none; }
+    .rp-stat-label { color: var(--text-muted); }
+    .rp-stat-val { font-weight: 700; color: var(--text); font-family: var(--f-display); font-size: 15px; }
+
+    /* Toast */
+    @keyframes toastUp { from { opacity:0; transform: translateY(8px); } to { opacity:1; transform: translateY(0); } }
+    @keyframes toastFade { from { opacity:1; } to { opacity:0; } }
+    .coin-toast {
+      position: fixed; bottom: 2rem; right: 1.5rem; z-index: 300;
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      color: #fff; font-weight: 700; font-size: .88rem;
+      padding: .5rem 1rem; box-shadow: 0 4px 16px rgba(230,0,0,.4);
+      pointer-events: none; animation: toastUp .25s ease forwards;
+    }
+    .coin-toast.fade { animation: toastFade .4s ease forwards; }
+
+    .loading {
+      text-align: center; padding: 3rem 1rem; color: var(--text-muted); font-size: .9rem;
+    }
+    .loading__spinner {
+      display: inline-block; width: 28px; height: 28px;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin .7s linear infinite; margin-bottom: .75rem;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .logout-btn {
+      padding: 8px 20px; border: 1px solid var(--border);
+      background: none; color: var(--text-muted);
+      font-family: var(--f-display); font-size: 14px; letter-spacing: .04em;
+      cursor: pointer; transition: all .15s; margin-top: 16px;
+    }
+    .logout-btn:hover { border-color: var(--heat); color: var(--heat); }
+  </style>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <div class="brand">
+      <div class="logo-mark">S</div>
+      <span class="brand-name">GAME <span class="accent-text">PULSE</span></span>
+    </div>
+    <div class="search-bar">
+      <input type="text" placeholder="Search players, teams..." readonly>
+    </div>
+    <div class="header-right">
+      <div id="headerUser"></div>
+      <a href="index.html" class="header-notif-text">← Back</a>
+      <div class="header-avatar"></div>
+    </div>
+  </header>
+
+  <!-- Side Nav -->
+  <nav class="side-nav">
+    <a href="index.html" class="nav-item" title="Games">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+    </a>
+    <a href="forum.html" class="nav-item" title="Forum">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    </a>
+    <div class="nav-item-divider"></div>
+    <a href="profile.html" class="nav-item active" title="Profile">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+    </a>
+    <a href="shop.html" class="nav-item" title="Shop">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 01-8 0"/></svg>
+    </a>
+  </nav>
+
+  <!-- Panel Matches: quick stats -->
+  <aside class="panel-matches">
+    <div class="panel-header">
+      <h3>MY STATS</h3>
+    </div>
+
+    <div id="panelStats">
+      <div style="font-size:12px;color:var(--text-muted);padding:8px 0">Loading…</div>
+    </div>
+
+    <div class="panel-header" style="margin-top:8px">
+      <h3>SCORE COIN</h3>
+    </div>
+    <div class="coin-widget">
+      <div class="coin-widget__dots"></div>
+      <div class="coin-widget__amount">
+        <span class="coin-widget__symbol">SC</span>
+        <span class="coin-widget__num" id="panelCoinBalance">—</span>
+      </div>
+      <div class="coin-widget__sub">Your balance</div>
+    </div>
+    <a href="shop.html" class="btn btn--primary" style="display:block;text-align:center;margin-top:10px;text-decoration:none;font-family:var(--f-display);font-size:14px;letter-spacing:.04em">Visit Shop →</a>
+  </aside>
+
+  <!-- Main Stage -->
+  <main class="main-stage" id="mainContent">
+    <div class="loading"><div class="loading__spinner"></div><br>Loading profile…</div>
+  </main>
+
+  <!-- Panel Social -->
+  <aside class="panel-social">
+
+    <div class="rp-section">
+      <div class="rp-head">Bet Stats</div>
+      <div id="rpBetStats">
+        <div style="font-size:12px;color:var(--text-muted)">Loading…</div>
+      </div>
+    </div>
+
+    <div class="rp-section">
+      <div class="rp-head">Ratings</div>
+      <div id="rpRatingStats">
+        <div style="font-size:12px;color:var(--text-muted)">Loading…</div>
+      </div>
+    </div>
+
+    <div class="rp-section">
+      <div class="rp-head">Forum</div>
+      <div id="rpForumStats">
+        <div style="font-size:12px;color:var(--text-muted)">Loading…</div>
+      </div>
+    </div>
+
+  </aside>
+
+</div><!-- /app-container -->
+
+<script src="api.js?v=3"></script>
+<script src="data.js"></script>
+<script>
+  if (!requireAuth()) throw new Error('redirecting');
+
+  function showCoinToast(msg) {
+    const t = document.createElement('div');
+    t.className = 'coin-toast';
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => { t.classList.add('fade'); setTimeout(() => t.remove(), 450); }, 1800);
+  }
+
+  async function init() {
+    // Header
+    try {
+      const user = getUser();
+      if (user) {
+        const el = document.getElementById('headerUser');
+        if (el) el.innerHTML = `<span class="header-notif-text">${escapeHtml(user.username)}</span>`;
+      }
+    } catch (e) {}
+
+    // Profile data
+    try {
+      const data = await apiGetProfile();
+      renderProfile(data);
+    } catch (err) {
+      document.getElementById('mainContent').innerHTML =
+        `<div class="loading">Failed to load profile: ${escapeHtml(err.message)}</div>`;
+    }
+
+    // Coins
+    try {
+      const coinData = await apiGetCoins();
+      document.getElementById('panelCoinBalance').textContent = (coinData.coins || 0).toLocaleString();
+    } catch (e) {}
+  }
+
+  function renderProfile(data) {
+    const { user, betStats, bets, forumStats, topics, ratings } = data;
+    const initials = (user.username || '?').slice(0, 2).toUpperCase();
+    const joinDate  = new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+    const winRate   = betStats.total > 0 ? Math.round((betStats.won / betStats.total) * 100) : 0;
+
+    /* ---- Left panel stats ---- */
+    const ps = document.getElementById('panelStats');
+    if (ps) {
+      ps.innerHTML = [
+        ['Bets Total', betStats.total || 0],
+        ['Bets Won', betStats.won || 0],
+        ['Win Rate', `${winRate}%`],
+        ['Topics', forumStats.topics || 0],
+        ['Replies', forumStats.replies || 0],
+        ['Players Rated', ratings.players || 0],
+      ].map(([label, val]) => `<div class="rp-stat-row">
+        <span class="rp-stat-label">${label}</span>
+        <span class="rp-stat-val">${val}</span>
+      </div>`).join('');
+    }
+
+    /* ---- Right panel ---- */
+    const rpBet = document.getElementById('rpBetStats');
+    if (rpBet) {
+      rpBet.innerHTML = [
+        ['Total', betStats.total || 0],
+        ['Won', betStats.won || 0],
+        ['Lost', betStats.lost || 0],
+        ['Pending', betStats.pending || 0],
+        ['Wagered', `${(betStats.wagered || 0).toLocaleString()} SC`],
+        ['Earned', `${(betStats.earned || 0).toLocaleString()} SC`],
+      ].map(([l, v]) => `<div class="rp-stat-row">
+        <span class="rp-stat-label">${l}</span>
+        <span class="rp-stat-val">${v}</span>
+      </div>`).join('');
+    }
+
+    const rpRat = document.getElementById('rpRatingStats');
+    if (rpRat) {
+      rpRat.innerHTML = [
+        ['Games Rated', ratings.games || 0],
+        ['Players Rated', ratings.players || 0],
+        ['Refs Rated', ratings.refs || 0],
+      ].map(([l, v]) => `<div class="rp-stat-row">
+        <span class="rp-stat-label">${l}</span>
+        <span class="rp-stat-val">${v}</span>
+      </div>`).join('');
+    }
+
+    const rpForum = document.getElementById('rpForumStats');
+    if (rpForum) {
+      rpForum.innerHTML = [
+        ['Topics', forumStats.topics || 0],
+        ['Replies', forumStats.replies || 0],
+      ].map(([l, v]) => `<div class="rp-stat-row">
+        <span class="rp-stat-label">${l}</span>
+        <span class="rp-stat-val">${v}</span>
+      </div>`).join('');
+    }
+
+    /* ---- Main stage ---- */
+    let bioHtml = '';
+    let editBioHtml = `
+      <div class="bio-edit-row">
+        <textarea id="bioInput" maxlength="160" placeholder="Write something about yourself…">${escapeHtml(user.bio || '')}</textarea>
+        <button class="bio-save-btn" onclick="saveBio()">Save</button>
+      </div>`;
+
+    const betRowsHtml = bets.length
+      ? bets.slice(0, 20).map(b => {
+          const date = new Date(b.placed_at || Date.now()).toLocaleDateString();
+          let statusClass = 'bet-status--pending', statusLabel = 'Pending';
+          if (b.settled && b.won)      { statusClass = 'bet-status--won'; statusLabel = 'Won'; }
+          else if (b.settled && !b.won){ statusClass = 'bet-status--lost'; statusLabel = 'Lost'; }
+          const pickLabel = b.pick || '—';
+          return `<tr>
+            <td>${escapeHtml(b.away_abbr || '?')} vs ${escapeHtml(b.home_abbr || '?')}</td>
+            <td><strong>${escapeHtml(pickLabel)}</strong></td>
+            <td>${b.amount} SC</td>
+            <td><span class="bet-status ${statusClass}">${statusLabel}</span></td>
+            <td>${date}</td>
+          </tr>`;
+        }).join('')
+      : `<tr><td colspan="5" style="color:var(--text-muted);text-align:center;padding:1.5rem">No bets yet.</td></tr>`;
+
+    const topicRowsHtml = topics.length
+      ? topics.map(t => {
+          const date = new Date(t.created_at).toLocaleDateString();
+          return `<div class="topic-row">
+            <a href="forum.html" class="topic-row__title">${escapeHtml(t.title)}</a>
+            <span class="topic-row__cat">${escapeHtml(t.category || 'General')}</span>
+            <span class="topic-row__date">${date}</span>
+          </div>`;
+        }).join('')
+      : `<div style="color:var(--text-muted);font-size:.85rem;padding:.5rem 0">No topics yet.</div>`;
+
+    document.getElementById('mainContent').innerHTML = `
+      <!-- Profile Hero -->
+      <div class="profile-hero">
+        <div class="profile-avatar">${initials}</div>
+        <div class="profile-hero__info">
+          <div class="profile-hero__name">${escapeHtml(user.username)}</div>
+          <div class="profile-hero__joined">Member since ${joinDate} · ${escapeHtml(user.email || '')}</div>
+        </div>
+        <div class="profile-hero__coins">
+          <span class="profile-hero__coins-label">Score Coin</span>
+          <div style="display:flex;align-items:baseline;gap:4px">
+            <span class="profile-hero__coins-sym">SC</span>
+            <span class="profile-hero__coins-num">${(user.coins || 0).toLocaleString()}</span>
+          </div>
+          <a href="shop.html" style="font-size:11px;color:var(--accent);font-weight:700;margin-top:4px;text-decoration:none">Visit Shop →</a>
+        </div>
+      </div>
+
+      <!-- Stat cards -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-card__label">Bets Won</div>
+          <div class="stat-card__value green">${betStats.won || 0}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">Win Rate</div>
+          <div class="stat-card__value accent">${winRate}%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">Coins Earned</div>
+          <div class="stat-card__value">${(betStats.earned || 0).toLocaleString()}</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-card__label">Players Rated</div>
+          <div class="stat-card__value blue">${ratings.players || 0}</div>
+        </div>
+      </div>
+
+      <!-- Bio -->
+      <div class="bio-section">
+        <div class="section-head">About Me</div>
+        <div class="bio-text" id="bioDisplay">${escapeHtml(user.bio || 'No bio yet.')}</div>
+        ${editBioHtml}
+      </div>
+
+      <!-- Bet History -->
+      <div style="margin-bottom:24px">
+        <div class="section-head">Bet History</div>
+        <div class="bet-table-wrap">
+          <table class="bet-table">
+            <thead>
+              <tr>
+                <th>Game</th><th>Pick</th><th>Amount</th><th>Result</th><th>Date</th>
+              </tr>
+            </thead>
+            <tbody>${betRowsHtml}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Forum Topics -->
+      <div style="margin-bottom:24px">
+        <div class="section-head">My Topics</div>
+        ${topicRowsHtml}
+      </div>
+
+      <!-- Logout -->
+      <button class="logout-btn" onclick="apiLogout()">Sign Out</button>
+
+      <footer style="margin-top:2rem;padding:1rem 0;border-top:1px solid var(--border);color:var(--text-muted);font-size:.72rem;font-family:var(--f-display);letter-spacing:0.08em;text-transform:uppercase;">
+        Game Pulse · Powered by ESPN · Data for reference only
+      </footer>
+    `;
+  }
+
+  async function saveBio() {
+    const bio = document.getElementById('bioInput')?.value?.trim() || '';
+    try {
+      await apiUpdateBio(bio);
+      const el = document.getElementById('bioDisplay');
+      if (el) el.textContent = bio || 'No bio yet.';
+      showCoinToast('Bio saved!');
+    } catch (err) {
+      showCoinToast('Error: ' + err.message);
+    }
+  }
+
+  init();
+</script>
+</body>
+</html>
