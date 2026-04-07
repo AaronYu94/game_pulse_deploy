@@ -372,7 +372,7 @@ export default function HomePage() {
   const sectionLabel = selectedDateKey === TODAY_KEY ? 'NBA GAMES' : selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
 
   return (
-    <div className="app-container">
+    <div className="app-container app-container--home">
       <Header searchPlaceholder="Search players, teams, stats..." />
 
       <SideNav />

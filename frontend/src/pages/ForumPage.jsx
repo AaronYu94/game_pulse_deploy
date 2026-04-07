@@ -217,7 +217,7 @@ export default function ForumPage() {
   }
 
   return (
-    <div className="app-container">
+    <div className="app-container app-container--forum">
       <Header searchPlaceholder="Search forum topics..." />
       <SideNav />
 

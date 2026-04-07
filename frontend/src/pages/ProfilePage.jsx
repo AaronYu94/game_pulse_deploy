@@ -71,7 +71,7 @@ export default function ProfilePage() {
     : '';
 
   return (
-    <div className="app-container">
+    <div className="app-container app-container--profile">
       <style>{`
         .profile-hero {
           background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
@@ -291,6 +291,52 @@ export default function ProfilePage() {
           color: #fff; font-weight: 700; font-size: .88rem;
           padding: .5rem 1rem; box-shadow: 0 4px 16px rgba(230,0,0,.4);
           pointer-events: none;
+        }
+        @media (max-width: 768px) {
+          .profile-hero {
+            padding: 20px 18px;
+            gap: 16px;
+            flex-wrap: wrap;
+          }
+          .profile-hero__name {
+            font-size: 30px;
+          }
+          .profile-hero__coins {
+            width: 100%;
+            align-items: flex-start;
+          }
+          .stat-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+          }
+          .bio-edit-row {
+            flex-direction: column;
+          }
+          .bio-save-btn {
+            width: 100%;
+          }
+          .topic-row {
+            flex-wrap: wrap;
+          }
+          .topic-row__title {
+            width: 100%;
+            white-space: normal;
+          }
+          .topic-row__date {
+            margin-left: auto;
+          }
+        }
+        @media (max-width: 480px) {
+          .profile-avatar {
+            width: 60px;
+            height: 60px;
+            font-size: 24px;
+          }
+          .profile-hero__name {
+            font-size: 26px;
+          }
+          .stat-row {
+            grid-template-columns: 1fr;
+          }
         }
       `}</style>
 

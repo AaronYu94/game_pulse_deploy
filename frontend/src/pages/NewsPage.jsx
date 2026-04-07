@@ -475,6 +475,104 @@ export default function NewsPage() {
           padding: .5rem 1rem; box-shadow: 0 4px 16px rgba(230,0,0,.4);
           pointer-events: none;
         }
+        @media (max-width: 768px) {
+          .news-page {
+            padding-left: 0;
+            padding-bottom: 78px;
+          }
+          .news-topbar {
+            height: auto;
+            min-height: 56px;
+            padding: 12px 14px;
+            gap: 10px;
+            flex-wrap: wrap;
+          }
+          .topbar-sep {
+            display: none;
+          }
+          .topbar-crumb {
+            order: 3;
+            width: 100%;
+            max-width: none;
+          }
+          .article-wrap {
+            padding: 20px 16px 84px;
+          }
+          .article-title {
+            font-size: 26px;
+          }
+          .article-meta__reddit {
+            margin-left: 0;
+          }
+          .link-card {
+            flex-direction: column;
+          }
+          .link-card__thumb {
+            width: 100%;
+            height: 160px;
+          }
+          .article-actions {
+            flex-wrap: wrap;
+          }
+          .share-action-btn {
+            margin-left: 0;
+          }
+          .comment-form__row {
+            flex-direction: column;
+          }
+          .side-nav {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            top: auto;
+            width: 100%;
+            height: 64px;
+            flex-direction: row;
+            justify-content: space-around;
+            padding: 0 10px;
+            gap: 0;
+            border-right: none;
+            border-top: 1px solid var(--border);
+            background: rgba(10,10,10,.96);
+            backdrop-filter: blur(12px);
+          }
+          .nav-item-divider {
+            display: none;
+          }
+          .nav-item.active::after {
+            left: 50%;
+            top: auto;
+            bottom: -4px;
+            width: 22px;
+            height: 3px;
+            transform: translateX(-50%);
+          }
+        }
+        @media (max-width: 480px) {
+          .news-topbar .brand-name {
+            font-size: 15px;
+          }
+          .back-btn {
+            width: 100%;
+            justify-content: center;
+          }
+          .article-wrap {
+            padding: 18px 14px 84px;
+          }
+          .article-hero {
+            aspect-ratio: 4 / 3;
+          }
+          .article-title {
+            font-size: 22px;
+          }
+          .comments-title {
+            flex-wrap: wrap;
+          }
+          .comment-item {
+            flex-direction: column;
+          }
+        }
       `}</style>
 
       <SideNav activePath="/" />

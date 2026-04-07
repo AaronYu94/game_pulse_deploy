@@ -356,7 +356,7 @@ export default function GamePage() {
   else if (completed) { heroStatusClass = 'hero-status--final'; heroStatusText = 'Final'; }
 
   return (
-    <div className="app-container">
+    <div className="app-container app-container--game">
       <Header />
       <SideNav />
 
@@ -511,14 +511,14 @@ export default function GamePage() {
               {/* Comment form */}
               <div style={{ marginTop: 16 }}>
                 {isLoggedIn ? (
-                  <form onSubmit={handleComment} style={{ display: 'flex', gap: 8 }}>
+                  <form onSubmit={handleComment} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <input
                       type="text"
                       className="form-input"
                       placeholder="Add a comment…"
                       value={commentText}
                       onChange={e => setCommentText(e.target.value)}
-                      style={{ flex: 1 }}
+                      style={{ flex: '1 1 240px' }}
                     />
                     <button type="submit" className="btn-send" disabled={commentLoading || !commentText.trim()}>
                       {commentLoading ? '…' : 'Send'}

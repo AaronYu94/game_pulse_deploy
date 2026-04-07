@@ -96,7 +96,7 @@ export default function ShopPage() {
     : shopItems.filter(i => i.type === shopTab);
 
   return (
-    <div className="app-container">
+    <div className="app-container app-container--shop">
       <Header searchPlaceholder="Search items..." />
       <SideNav />
 
