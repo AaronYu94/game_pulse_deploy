@@ -1,274 +1,530 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import Header from '../components/Header.jsx';
-import { apiGetProfile, apiUpdateProfile } from '../lib/api.js';
-
-const AVATAR_COLORS = ['#ff6b2b','#f59500','#22c55e','#3b82f6','#a855f7','#ec4899','#14b8a6'];
-
-function avatarColor(username) {
-  let h = 0;
-  for (let i = 0; i < username.length; i++) h = username.charCodeAt(i) + ((h << 5) - h);
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
-}
-
-function timeAgo(ts) {
-  const d = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
-  if (d < 60) return 'just now';
-  if (d < 3600) return `${Math.floor(d / 60)}m ago`;
-  if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
-  if (d < 86400 * 30) return `${Math.floor(d / 86400)}d ago`;
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function StatCard({ label, value, highlight }) {
-  return (
-    <div className="card" style={{ padding: '1rem', textAlign: 'center' }}>
-      <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '1.6rem', lineHeight: 1, color: highlight ? 'var(--accent-2)' : 'var(--text)', marginBottom: '0.2rem' }}>{value}</div>
-      <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</div>
-    </div>
-  );
-}
+import { useState, useEffect, useCallback } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import Header, { SideNav } from '../components/Header.jsx';
+import { useAuth } from '../contexts/AuthContext.jsx';
+import {
+  apiGetProfile, apiUpdateProfile, apiGetCoins,
+} from '../lib/api.js';
 
 export default function ProfilePage() {
+  const { logout } = useAuth();
   const navigate = useNavigate();
-  const [data, setData]       = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [coins, setCoins] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab]         = useState('bets');
-  const [editBio, setEditBio] = useState(false);
-  const [bio, setBio]         = useState('');
-  const [saving, setSaving]   = useState(false);
+  const [bio, setBio] = useState('');
+  const [bioSaving, setBioSaving] = useState(false);
+  const [toast, setToast] = useState('');
 
-  useEffect(() => {
-    apiGetProfile()
-      .then(d => { setData(d); setBio(d.user.bio || ''); setLoading(false); })
-      .catch(() => setLoading(false));
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+    setTimeout(() => setToast(''), 2200);
   }, []);
 
-  async function saveBio() {
-    setSaving(true);
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const [profileData, coinData] = await Promise.all([
+          apiGetProfile(),
+          apiGetCoins(),
+        ]);
+        setProfile(profileData);
+        setCoins(coinData.coins ?? 0);
+        setBio(profileData.user?.bio || '');
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  async function handleSaveBio() {
+    setBioSaving(true);
     try {
       await apiUpdateProfile({ bio });
-      setData(prev => ({ ...prev, user: { ...prev.user, bio } }));
-      setEditBio(false);
-    } catch (_) {}
-    setSaving(false);
+      showToast('Bio saved!');
+    } catch (err) {
+      showToast('Error: ' + err.message);
+    } finally {
+      setBioSaving(false);
+    }
   }
 
-  if (loading) {
-    return (
-      <div className="page">
-        <Header />
-        <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-muted)' }}>
-          <div style={{ display: 'inline-block', width: 28, height: 28, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin .7s linear infinite' }} />
-        </div>
-      </div>
-    );
+  function handleLogout() {
+    logout();
+    navigate('/login');
   }
 
-  if (!data) {
-    return (
-      <div className="page">
-        <Header />
-        <div className="empty">Failed to load profile.</div>
-      </div>
-    );
-  }
-
-  const { user, betStats, bets, forumStats, topics, ratings } = data;
-  const color = avatarColor(user.username);
-  const settled = (betStats.won || 0) + (betStats.lost || 0);
-  const winRate = settled > 0 ? Math.round(((betStats.won || 0) / settled) * 100) : null;
-
-  const TABS = [
-    { key: 'bets',  label: `Bets (${betStats.total || 0})` },
-    { key: 'forum', label: `Forum (${(forumStats.topics || 0) + (forumStats.replies || 0)})` },
-  ];
+  const user = profile?.user;
+  const betStats = profile?.betStats || {};
+  const bets = profile?.bets || [];
+  const forumStats = profile?.forumStats || {};
+  const topics = profile?.topics || [];
+  const ratings = profile?.ratings || {};
+  const winRate = betStats.total > 0 ? Math.round((betStats.won / betStats.total) * 100) : 0;
+  const initials = (user?.username || '?').slice(0, 2).toUpperCase();
+  const joinDate = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
+    : '';
 
   return (
-    <div className="page">
-      <Header />
+    <div className="app-container">
+      <style>{`
+        .profile-hero {
+          background: linear-gradient(135deg, #1a1a1a 0%, #0a0a0a 100%);
+          border: 1px solid var(--border);
+          padding: 28px 32px;
+          margin-bottom: 24px;
+          position: relative;
+          overflow: hidden;
+          display: flex;
+          align-items: center;
+          gap: 24px;
+        }
+        .profile-hero::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: linear-gradient(90deg, var(--accent), var(--blue));
+        }
+        .profile-avatar {
+          width: 72px; height: 72px;
+          clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+          background: var(--accent);
+          display: flex; align-items: center; justify-content: center;
+          font-family: var(--f-display);
+          font-size: 28px;
+          color: #fff;
+          flex-shrink: 0;
+        }
+        .profile-hero__info { flex: 1; min-width: 0; }
+        .profile-hero__name {
+          font-family: var(--f-display);
+          font-size: 38px;
+          line-height: 1;
+          color: var(--text);
+        }
+        .profile-hero__joined {
+          font-size: 12px;
+          color: var(--text-muted);
+          margin-top: 6px;
+        }
+        .profile-hero__coins {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-end;
+          gap: 2px;
+        }
+        .profile-hero__coins-label {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: var(--text-muted);
+        }
+        .profile-hero__coins-num {
+          font-family: var(--f-display);
+          font-size: 36px;
+          color: var(--accent);
+          line-height: 1;
+        }
+        .profile-hero__coins-sym {
+          font-family: var(--f-display);
+          font-size: 16px;
+          color: var(--accent);
+        }
+        .stat-row {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+          margin-bottom: 24px;
+        }
+        .stat-card {
+          border: 1px solid var(--border);
+          background: var(--bg-card);
+          padding: 14px 16px;
+        }
+        .stat-card__label {
+          font-size: 10px;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          color: var(--text-muted);
+          margin-bottom: 4px;
+        }
+        .stat-card__value {
+          font-family: var(--f-display);
+          font-size: 30px;
+          color: var(--text);
+          line-height: 1;
+        }
+        .stat-card__value.accent { color: var(--accent); }
+        .stat-card__value.green { color: #22c55e; }
+        .stat-card__value.blue { color: var(--blue); }
+        .section-head {
+          font-family: var(--f-display);
+          font-size: 20px;
+          letter-spacing: .04em;
+          color: var(--text);
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          border-bottom: 1px solid var(--border);
+          padding-bottom: 10px;
+        }
+        .section-head::before {
+          content: '';
+          width: 4px; height: 20px;
+          background: var(--accent);
+          display: block;
+          flex-shrink: 0;
+        }
+        .bio-section { margin-bottom: 24px; }
+        .bio-text {
+          font-size: 14px;
+          color: var(--text-sub);
+          line-height: 1.6;
+          margin-bottom: 8px;
+          min-height: 40px;
+        }
+        .bio-edit-row {
+          display: flex;
+          gap: 8px;
+          align-items: flex-start;
+        }
+        .bio-edit-row textarea {
+          flex: 1;
+          background: var(--bg-surface);
+          border: 1px solid var(--border);
+          color: var(--text);
+          padding: 8px 10px;
+          font-size: 13px;
+          font-family: var(--f-body);
+          resize: vertical;
+          min-height: 60px;
+        }
+        .bio-edit-row textarea:focus { outline: none; border-color: var(--accent); }
+        .bio-save-btn {
+          padding: 8px 18px;
+          background: var(--accent);
+          border: none;
+          color: #fff;
+          font-family: var(--f-display);
+          font-size: 14px;
+          cursor: pointer;
+          transition: opacity .15s;
+          flex-shrink: 0;
+        }
+        .bio-save-btn:hover { opacity: .85; }
+        .bio-save-btn:disabled { opacity: .4; cursor: not-allowed; }
+        .bet-table-wrap { overflow-x: auto; border: 1px solid var(--border); margin-bottom: 24px; }
+        .bet-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .bet-table th {
+          padding: 8px 12px;
+          font-size: 10px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: .08em; color: var(--text-muted);
+          background: var(--bg-surface);
+          border-bottom: 1px solid var(--border);
+          text-align: left;
+        }
+        .bet-table td {
+          padding: 8px 12px;
+          border-top: 1px solid var(--border);
+          color: var(--text-sub);
+        }
+        .bet-table tr:hover td { background: var(--bg-card-hover); }
+        .bet-status { font-size: 11px; font-weight: 700; padding: 2px 7px; border: 1px solid; }
+        .bet-status--won { color: #22c55e; border-color: rgba(34,197,94,.3); background: rgba(34,197,94,.08); }
+        .bet-status--lost { color: var(--heat); border-color: rgba(239,68,68,.3); background: rgba(239,68,68,.08); }
+        .bet-status--pending { color: var(--blue); border-color: rgba(59,130,246,.3); background: rgba(59,130,246,.08); }
+        .topic-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 10px 0;
+          border-bottom: 1px solid var(--border);
+        }
+        .topic-row:last-child { border-bottom: none; }
+        .topic-row__title {
+          flex: 1;
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--text);
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+          text-decoration: none;
+        }
+        .topic-row__title:hover { color: var(--accent); }
+        .topic-row__cat {
+          font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+          padding: 2px 7px; border: 1px solid var(--border); color: var(--text-muted);
+          flex-shrink: 0;
+        }
+        .topic-row__date { font-size: 11px; color: var(--text-muted); flex-shrink: 0; }
+        .rp-section { padding: 16px; border-bottom: 1px solid var(--border); }
+        .rp-head {
+          font-family: var(--f-display); font-size: 14px; text-transform: uppercase;
+          letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 12px;
+          display: flex; align-items: center; gap: 8px;
+        }
+        .rp-head::before { content: ''; width: 3px; height: 14px; background: var(--accent); display: block; }
+        .rp-stat-row {
+          display: flex; justify-content: space-between;
+          padding: 6px 0; border-bottom: 1px solid var(--border);
+          font-size: 12px;
+        }
+        .rp-stat-row:last-child { border-bottom: none; }
+        .rp-stat-label { color: var(--text-muted); }
+        .rp-stat-val { font-weight: 700; color: var(--text); font-family: var(--f-display); font-size: 15px; }
+        .logout-btn {
+          padding: 8px 20px; border: 1px solid var(--border);
+          background: none; color: var(--text-muted);
+          font-family: var(--f-display); font-size: 14px; letter-spacing: .04em;
+          cursor: pointer; transition: all .15s; margin-top: 16px;
+        }
+        .logout-btn:hover { border-color: var(--heat); color: var(--heat); }
+        .coin-toast {
+          position: fixed; bottom: 2rem; right: 1.5rem; z-index: 300;
+          background: linear-gradient(135deg, var(--accent), var(--accent-2));
+          color: #fff; font-weight: 700; font-size: .88rem;
+          padding: .5rem 1rem; box-shadow: 0 4px 16px rgba(230,0,0,.4);
+          pointer-events: none;
+        }
+      `}</style>
 
-      <div style={{ marginBottom: '1rem' }}>
-        <button
-          onClick={() => navigate(-1)}
-          style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem', padding: '0.5rem 0', fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: '0.3rem' }}
-        >
-          ← Back
-        </button>
-      </div>
+      <Header searchPlaceholder="Search players, teams..." />
+      <SideNav activePath="/profile" />
 
-      {/* ── Profile hero ── */}
-      <div className="card" style={{ padding: '2rem', marginBottom: '1.5rem', position: 'relative', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg, ${color}, var(--accent-2))` }} />
-
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1.25rem', flexWrap: 'wrap' }}>
-          {/* Avatar */}
-          <div style={{ width: 72, height: 72, borderRadius: '50%', background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: "'Bebas Neue',sans-serif", fontSize: '2.2rem', color: '#fff', flexShrink: 0, boxShadow: `0 0 0 4px ${color}22` }}>
-            {user.username[0].toUpperCase()}
-          </div>
-
-          {/* Name + bio */}
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '1.8rem', letterSpacing: '0.06em', lineHeight: 1, marginBottom: '0.25rem' }}>
-              {user.username}
-            </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.8rem' }}>
-              Joined {new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-            </div>
-
-            {editBio ? (
-              <div>
-                <textarea
-                  value={bio}
-                  onChange={e => setBio(e.target.value)}
-                  maxLength={160}
-                  rows={2}
-                  placeholder="Write something about yourself…"
-                  style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text)', fontFamily: 'inherit', fontSize: '0.88rem', padding: '0.5rem 0.75rem', resize: 'none', outline: 'none', boxSizing: 'border-box', marginBottom: '0.5rem' }}
-                />
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <button onClick={saveBio} disabled={saving} className="btn btn--primary" style={{ fontSize: '0.78rem', padding: '0.3rem 0.9rem' }}>
-                    {saving ? 'Saving…' : 'Save'}
-                  </button>
-                  <button
-                    onClick={() => { setEditBio(false); setBio(data.user.bio || ''); }}
-                    style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-pill)', padding: '0.3rem 0.9rem', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit' }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.88rem', color: user.bio ? 'var(--text-sub)' : 'var(--text-muted)', fontStyle: user.bio ? 'normal' : 'italic', lineHeight: 1.5 }}>
-                  {user.bio || 'No bio yet.'}
-                </span>
-                <button
-                  onClick={() => setEditBio(true)}
-                  style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-pill)', padding: '0.15rem 0.55rem', fontSize: '0.68rem', color: 'var(--text-muted)', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, marginTop: 2 }}
-                >
-                  Edit
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Coins */}
-          <div style={{ textAlign: 'right', flexShrink: 0 }}>
-            <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '2.2rem', lineHeight: 1, color: 'var(--accent-2)' }}>
-              {user.coins}
-            </div>
-            <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Score Coin</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Stats grid ── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '0.7rem', marginBottom: '2rem' }}>
-        <StatCard label="Bets Placed"    value={betStats.total   || 0} />
-        <StatCard label="Win / Loss"     value={betStats.total > 0 ? `${betStats.won || 0} / ${betStats.lost || 0}` : '—'} />
-        <StatCard label="Win Rate"       value={winRate !== null ? `${winRate}%` : '—'} highlight={winRate >= 50} />
-        <StatCard label="Pending Bets"   value={betStats.pending || 0} />
-        <StatCard label="Game Ratings"   value={ratings.games   || 0} />
-        <StatCard label="Player Ratings" value={ratings.players || 0} />
-        <StatCard label="Ref Ratings"    value={ratings.refs    || 0} />
-        <StatCard label="Forum Topics"   value={forumStats.topics  || 0} />
-        <StatCard label="Forum Replies"  value={forumStats.replies || 0} />
-      </div>
-
-      {/* ── Tabs ── */}
-      <div style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: '1.5rem' }}>
-        {TABS.map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            style={{ padding: '0.7rem 1.2rem', background: 'none', border: 'none', borderBottom: `2px solid ${tab === t.key ? 'var(--accent)' : 'transparent'}`, fontFamily: 'inherit', fontSize: '0.85rem', fontWeight: 700, color: tab === t.key ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', marginBottom: -1, transition: 'color .15s' }}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Bet history ── */}
-      {tab === 'bets' && (
-        bets.length === 0 ? (
-          <div className="empty">No bets placed yet.</div>
+      {/* Left panel */}
+      <aside className="panel-matches">
+        <div className="panel-header"><h3>MY STATS</h3></div>
+        {loading ? (
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 0' }}>Loading…</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {bets.map(b => {
-              const pickedTeam = b.pick === 'home' ? b.home_abbr : b.away_abbr;
-              return (
-                <div
-                  key={b.id}
-                  className="card"
-                  style={{
-                    padding: '1rem 1.25rem',
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap',
-                    borderColor: b.settled ? (b.won ? 'rgba(34,197,94,.3)' : 'rgba(239,68,68,.25)') : undefined,
-                  }}
-                >
-                  <div>
-                    <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '1.05rem', letterSpacing: '0.05em', marginBottom: '0.25rem' }}>
-                      {b.away_abbr} vs {b.home_abbr}
-                    </div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap' }}>
-                      <span>Picked <strong style={{ color: 'var(--accent-2)' }}>{pickedTeam}</strong></span>
-                      <span style={{ opacity: 0.35 }}>·</span>
-                      <span>SC {b.amount}</span>
-                      <span style={{ opacity: 0.35 }}>·</span>
-                      <span>{timeAgo(b.placed_at)}</span>
-                    </div>
-                  </div>
-                  <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                    {!b.settled ? (
-                      <div style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--blue)' }}>Pending</div>
-                    ) : b.won ? (
-                      <div>
-                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '1.15rem', color: 'var(--success)', lineHeight: 1 }}>Won</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--success)', opacity: 0.85 }}>+SC {b.amount}</div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '1.15rem', color: 'var(--heat)', lineHeight: 1 }}>Lost</div>
-                        <div style={{ fontSize: '0.7rem', color: 'var(--heat)', opacity: 0.75 }}>-SC {b.amount}</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )
-      )}
-
-      {/* ── Forum activity ── */}
-      {tab === 'forum' && (
-        topics.length === 0 ? (
-          <div className="empty">No forum topics yet.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-            {topics.map(t => (
-              <Link key={t.id} to={`/forum?topic=${t.id}`} style={{ textDecoration: 'none' }}>
-                <div className="card card--interactive" style={{ padding: '1rem 1.25rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
-                    <span style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--accent)', background: 'var(--accent-glow)', padding: '0.1rem 0.45rem', borderRadius: 'var(--radius-pill)' }}>
-                      {t.category}
-                    </span>
-                  </div>
-                  <div style={{ fontWeight: 600, fontSize: '0.95rem', color: 'var(--text)', marginBottom: '0.25rem' }}>{t.title}</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                    {t.views} views · {timeAgo(t.created_at)}
-                  </div>
-                </div>
-              </Link>
+          <div>
+            {[
+              ['Bets Total', betStats.total || 0],
+              ['Bets Won', betStats.won || 0],
+              ['Win Rate', `${winRate}%`],
+              ['Topics', forumStats.topics || 0],
+              ['Replies', forumStats.replies || 0],
+              ['Players Rated', ratings.players || 0],
+            ].map(([label, val]) => (
+              <div key={label} className="rp-stat-row" style={{ padding: '6px 16px' }}>
+                <span className="rp-stat-label">{label}</span>
+                <span className="rp-stat-val">{val}</span>
+              </div>
             ))}
           </div>
-        )
-      )}
+        )}
 
-      <footer className="site-footer" style={{ marginTop: '3rem' }}>
-        SCORE · NBA · Powered by ESPN · Data for reference only · Score Coin is virtual currency with no real-world value
-      </footer>
+        <div className="panel-header" style={{ marginTop: 8 }}><h3>SCORE COIN</h3></div>
+        <div className="coin-widget">
+          <div className="coin-widget__dots"></div>
+          <div className="coin-widget__amount">
+            <span className="coin-widget__symbol">SC</span>
+            <span className="coin-widget__num">{coins !== null ? coins.toLocaleString() : '—'}</span>
+          </div>
+          <div className="coin-widget__sub">Your balance</div>
+        </div>
+        <Link to="/shop" className="btn btn--primary" style={{ display: 'block', textAlign: 'center', marginTop: 10, textDecoration: 'none', fontFamily: 'var(--f-display)', fontSize: 14, letterSpacing: '.04em' }}>
+          Visit Shop →
+        </Link>
+      </aside>
+
+      {/* Main stage */}
+      <main className="main-stage">
+        {loading ? (
+          <div className="loading"><div className="loading__spinner" /><br />Loading profile…</div>
+        ) : !user ? (
+          <div className="loading">Failed to load profile.</div>
+        ) : (
+          <>
+            {/* Profile Hero */}
+            <div className="profile-hero">
+              <div className="profile-avatar">{initials}</div>
+              <div className="profile-hero__info">
+                <div className="profile-hero__name">{user.username}</div>
+                <div className="profile-hero__joined">
+                  Member since {joinDate} · {user.email || ''}
+                </div>
+              </div>
+              <div className="profile-hero__coins">
+                <span className="profile-hero__coins-label">Score Coin</span>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                  <span className="profile-hero__coins-sym">SC</span>
+                  <span className="profile-hero__coins-num">{(user.coins || 0).toLocaleString()}</span>
+                </div>
+                <Link to="/shop" style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 700, marginTop: 4, textDecoration: 'none' }}>
+                  Visit Shop →
+                </Link>
+              </div>
+            </div>
+
+            {/* Stat cards */}
+            <div className="stat-row">
+              <div className="stat-card">
+                <div className="stat-card__label">Bets Won</div>
+                <div className="stat-card__value green">{betStats.won || 0}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-card__label">Win Rate</div>
+                <div className="stat-card__value accent">{winRate}%</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-card__label">Coins Earned</div>
+                <div className="stat-card__value">{(betStats.earned || 0).toLocaleString()}</div>
+              </div>
+              <div className="stat-card">
+                <div className="stat-card__label">Players Rated</div>
+                <div className="stat-card__value blue">{ratings.players || 0}</div>
+              </div>
+            </div>
+
+            {/* Bio */}
+            <div className="bio-section">
+              <div className="section-head">About Me</div>
+              <div className="bio-text">{bio || 'No bio yet.'}</div>
+              <div className="bio-edit-row">
+                <textarea
+                  maxLength={160}
+                  placeholder="Write something about yourself…"
+                  value={bio}
+                  onChange={e => setBio(e.target.value)}
+                />
+                <button className="bio-save-btn" onClick={handleSaveBio} disabled={bioSaving}>
+                  {bioSaving ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+
+            {/* Bet History */}
+            <div style={{ marginBottom: 24 }}>
+              <div className="section-head">Bet History</div>
+              <div className="bet-table-wrap">
+                <table className="bet-table">
+                  <thead>
+                    <tr>
+                      <th>Game</th>
+                      <th>Pick</th>
+                      <th>Amount</th>
+                      <th>Result</th>
+                      <th>Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bets.length === 0 ? (
+                      <tr>
+                        <td colSpan={5} style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem' }}>
+                          No bets yet.
+                        </td>
+                      </tr>
+                    ) : bets.slice(0, 20).map(b => {
+                      const date = new Date(b.placed_at || Date.now()).toLocaleDateString();
+                      let statusClass = 'bet-status--pending', statusLabel = 'Pending';
+                      if (b.settled && b.won)       { statusClass = 'bet-status--won';  statusLabel = 'Won'; }
+                      else if (b.settled && !b.won) { statusClass = 'bet-status--lost'; statusLabel = 'Lost'; }
+                      return (
+                        <tr key={b.id || b.game_id}>
+                          <td>{b.away_abbr || '?'} vs {b.home_abbr || '?'}</td>
+                          <td><strong>{b.pick || '—'}</strong></td>
+                          <td>{b.amount} SC</td>
+                          <td><span className={`bet-status ${statusClass}`}>{statusLabel}</span></td>
+                          <td>{date}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Forum Topics */}
+            <div style={{ marginBottom: 24 }}>
+              <div className="section-head">My Topics</div>
+              {topics.length === 0 ? (
+                <div style={{ color: 'var(--text-muted)', fontSize: '.85rem', padding: '.5rem 0' }}>No topics yet.</div>
+              ) : topics.map(t => (
+                <div key={t.id} className="topic-row">
+                  <Link to={`/forum`} className="topic-row__title">{t.title}</Link>
+                  <span className="topic-row__cat">{t.category || 'General'}</span>
+                  <span className="topic-row__date">{new Date(t.created_at).toLocaleDateString()}</span>
+                </div>
+              ))}
+            </div>
+
+            {/* Logout */}
+            <button className="logout-btn" onClick={handleLogout}>Sign Out</button>
+
+            <footer style={{ marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '.72rem', fontFamily: 'var(--f-display)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              Game Pulse · Powered by ESPN · Data for reference only
+            </footer>
+          </>
+        )}
+      </main>
+
+      {/* Right panel */}
+      <aside className="panel-social">
+        <div className="rp-section">
+          <div className="rp-head">Bet Stats</div>
+          {loading ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>
+          ) : (
+            [
+              ['Total', betStats.total || 0],
+              ['Won', betStats.won || 0],
+              ['Lost', betStats.lost || 0],
+              ['Pending', betStats.pending || 0],
+              ['Wagered', `${(betStats.wagered || 0).toLocaleString()} SC`],
+              ['Earned', `${(betStats.earned || 0).toLocaleString()} SC`],
+            ].map(([l, v]) => (
+              <div key={l} className="rp-stat-row">
+                <span className="rp-stat-label">{l}</span>
+                <span className="rp-stat-val">{v}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="rp-section">
+          <div className="rp-head">Ratings</div>
+          {loading ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>
+          ) : (
+            [
+              ['Games Rated', ratings.games || 0],
+              ['Players Rated', ratings.players || 0],
+              ['Refs Rated', ratings.refs || 0],
+            ].map(([l, v]) => (
+              <div key={l} className="rp-stat-row">
+                <span className="rp-stat-label">{l}</span>
+                <span className="rp-stat-val">{v}</span>
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="rp-section">
+          <div className="rp-head">Forum</div>
+          {loading ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Loading…</div>
+          ) : (
+            [
+              ['Topics', forumStats.topics || 0],
+              ['Replies', forumStats.replies || 0],
+            ].map(([l, v]) => (
+              <div key={l} className="rp-stat-row">
+                <span className="rp-stat-label">{l}</span>
+                <span className="rp-stat-val">{v}</span>
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
+
+      {toast && <div className="coin-toast">{toast}</div>}
     </div>
   );
 }

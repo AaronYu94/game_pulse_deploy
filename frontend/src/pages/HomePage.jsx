@@ -1,32 +1,25 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import Header from '../components/Header.jsx';
-import TasksPanel from '../components/TasksPanel.jsx';
-import TeamLogo from '../components/TeamLogo.jsx';
-import { fetchGames, monthCalendarDays, toESPNDate } from '../lib/espn.js';
-import { apiSettleBets, apiClaimTask, DAILY_TASK_DEFS } from '../lib/api.js';
+import { useNavigate, Link } from 'react-router-dom';
+import Header, { SideNav } from '../components/Header.jsx';
+import { fetchGames, monthCalendarDays, toESPNDate, getTeamColors } from '../lib/espn.js';
+import {
+  apiSettleBets, apiGetAllBets, apiGetCoins, apiClaimTask, DAILY_TASK_DEFS,
+} from '../lib/api.js';
 
 const ALL_DAYS  = monthCalendarDays();
 const TODAY_KEY = toESPNDate(new Date());
 const TODAY_IDX = ALL_DAYS.findIndex(d => toESPNDate(d) === TODAY_KEY);
 const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-function LiveDot() {
+function TeamBadge({ abbr, size = '' }) {
+  const c = getTeamColors(abbr);
+  const cls = size ? `team-badge team-badge--${size}` : 'team-badge';
   return (
-    <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: 'var(--heat)', marginRight: 4, verticalAlign: 'middle', animation: 'pulse 1.4s ease-in-out infinite' }} />
-  );
-}
-
-function TeamSide({ team, side, showScore, isWinner }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flex: 1, flexDirection: side === 'home' ? 'row-reverse' : 'row', textAlign: side === 'home' ? 'right' : 'left' }}>
-      <TeamLogo teamId={team.id} abbr={team.abbr} size={36} />
-      <div>
-        <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.2rem', letterSpacing: '0.06em', lineHeight: 1, color: isWinner ? 'var(--text)' : 'var(--text-sub)' }}>
-          {team.abbr}
-        </div>
-        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 1 }}>{team.record}</div>
-      </div>
+    <div
+      className={cls}
+      style={{ background: c.bg, borderColor: c.border, color: c.text }}
+    >
+      {abbr || '?'}
     </div>
   );
 }
@@ -37,81 +30,226 @@ function GameCard({ game, isFuture, allBets, selectedDateKey, onShare, navigate 
   const homeWin = game.completed && game.home.winner;
   const showScore = game.completed || game.inProgress;
 
-  let statusText, statusColor;
-  if (game.inProgress) {
-    statusText = `Q${game.period} ${game.clock}`;
-    statusColor = 'var(--heat)';
-  } else if (game.completed) {
-    statusText = 'Final';
-    statusColor = 'var(--text-muted)';
-  } else {
-    statusText = game.displayTime;
-    statusColor = 'var(--blue)';
-  }
-
-  const betPick = bet ? (bet.pick === 'home' ? bet.home_abbr : bet.away_abbr) : null;
+  let statusClass, statusText;
+  if (game.inProgress) { statusClass = 'game-card__status--live'; statusText = `Q${game.period} ${game.clock}`; }
+  else if (game.completed) { statusClass = 'game-card__status--final'; statusText = 'Final'; }
+  else { statusClass = 'game-card__status--sched'; statusText = game.displayTime; }
 
   return (
     <div
-      className="card card--interactive"
+      className={`game-card${game.inProgress ? ' active-game' : ''}${isFuture ? ' future-card' : ''}`}
       onClick={() => navigate(`/game?id=${game.id}&date=${selectedDateKey}`)}
-      style={{
-        padding: '1.1rem 1.25rem', cursor: 'pointer', position: 'relative', overflow: 'hidden',
-        ...(bet ? {
-          border: '1px solid rgba(251,191,36,.35)',
-          background: 'linear-gradient(135deg, rgba(251,191,36,.06) 0%, var(--bg-card) 60%)',
-          boxShadow: '0 0 0 1px rgba(251,191,36,.15), 0 4px 16px rgba(251,191,36,.08)',
-        } : {}),
-      }}
     >
-      {bet ? (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--accent-2), #fcd34d)', opacity: 0.8 }} />
-      ) : isFuture ? (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--blue), #60a5fa)', opacity: 0.5 }} />
-      ) : null}
-
-      <div style={{ fontSize: '0.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.75rem', color: statusColor, display: 'flex', alignItems: 'center' }}>
-        {game.inProgress && <LiveDot />}
+      <div className={`game-card__status ${statusClass}`}>
+        {game.inProgress && <span className="live-dot" style={{ marginRight: 4 }} />}
         {statusText}
       </div>
-
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
-        <TeamSide team={game.away} side="away" showScore={showScore} isWinner={awayWin} />
-        {showScore ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontFamily: "'Bebas Neue', sans-serif" }}>
-            <div style={{ fontSize: '1.8rem', color: awayWin ? 'var(--text)' : 'var(--text-sub)', lineHeight: 1, minWidth: 32, textAlign: 'center' }}>{game.away.score ?? ''}</div>
-            <div style={{ fontSize: '1rem', color: 'var(--border-mid)' }}>-</div>
-            <div style={{ fontSize: '1.8rem', color: homeWin ? 'var(--text)' : 'var(--text-sub)', lineHeight: 1, minWidth: 32, textAlign: 'center' }}>{game.home.score ?? ''}</div>
+      <div className="game-card__matchup">
+        <div className="team-side team-side--away">
+          <TeamBadge abbr={game.away.abbr} size="sm" />
+          <div>
+            <div className={`team-info__abbr${awayWin ? ' winner' : game.inProgress ? ' live' : ''}`}>{game.away.abbr}</div>
+            <div className="team-info__record">{game.away.record}</div>
           </div>
-        ) : (
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '0 0.5rem' }}>vs</div>
-        )}
-        <TeamSide team={game.home} side="home" showScore={showScore} isWinner={homeWin} />
+        </div>
+        <div className="score-col">
+          {showScore ? (
+            <>
+              <span className={`score-col__num${awayWin ? ' score-col__num--winner' : game.inProgress ? ' score-col__num--live' : ''}`}>{game.away.score ?? ''}</span>
+              <span className="score-col__sep">-</span>
+              <span className={`score-col__num${homeWin ? ' score-col__num--winner' : game.inProgress ? ' score-col__num--live' : ''}`}>{game.home.score ?? ''}</span>
+            </>
+          ) : (
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>vs</span>
+          )}
+        </div>
+        <div className="team-side team-side--home">
+          <TeamBadge abbr={game.home.abbr} size="sm" />
+          <div>
+            <div className={`team-info__abbr${homeWin ? ' winner' : game.inProgress ? ' live' : ''}`}>{game.home.abbr}</div>
+            <div className="team-info__record">{game.home.record}</div>
+          </div>
+        </div>
       </div>
-
-      <div style={{ marginTop: '0.65rem', fontSize: '0.76rem', color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div className="game-card__footer">
         {bet ? (
-          <span style={{ color: 'var(--accent-2)', fontWeight: 600 }}>
-            SC {bet.amount} on <strong>{betPick}</strong>
+          <span style={{ color: 'var(--accent-2)', fontWeight: 600, fontSize: 10 }}>
+            SC {bet.amount} on {bet.pick === 'home' ? bet.home_abbr : bet.away_abbr}
             {bet.settled && bet.won && <span style={{ color: 'var(--success)' }}> · Won</span>}
-            {bet.settled && !bet.won && <span style={{ color: 'var(--heat)', opacity: 0.8 }}> · Lost</span>}
+            {bet.settled && !bet.won && <span style={{ color: 'var(--accent)', opacity: 0.8 }}> · Lost</span>}
             {!bet.settled && <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}> · Pending</span>}
           </span>
         ) : isFuture ? (
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--blue)', background: 'var(--blue-glow)', border: '1px solid rgba(59,130,246,.2)', borderRadius: 'var(--radius-pill)', padding: '0.18rem 0.55rem' }}>
-            Predict &amp; Discuss
-          </span>
+          <span className="future-badge">Predict &amp; Discuss</span>
         ) : (
           <span>{game.statusText}</span>
         )}
         <button
+          className="share-btn"
           onClick={e => { e.stopPropagation(); onShare(game); }}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.75rem', padding: 0, display: 'flex', alignItems: 'center', gap: '0.2rem', lineHeight: 1, flexShrink: 0 }}
         >
           Share
         </button>
       </div>
     </div>
+  );
+}
+
+/* News Feed */
+const ESPN_NEWS_URL = 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/news?limit=20';
+
+function NewsTag({ category }) {
+  const map = {
+    Breaking: 'news-tag--breaking', Trade: 'news-tag--trade',
+    Highlight: 'news-tag--highlight', Thread: 'news-tag--thread',
+  };
+  const cls = map[category] || 'news-tag--general';
+  return <span className={`news-tag ${cls}`}>{category}</span>;
+}
+
+function NewsFeed() {
+  const [articles, setArticles] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [src, setSrc] = useState('hot');
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await fetch(ESPN_NEWS_URL);
+        if (!res.ok) throw new Error('Failed to load news');
+        const json = await res.json();
+        setArticles(json.articles || []);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, []);
+
+  if (loading) {
+    return (
+      <div id="newsFeed">
+        <div className="skel-featured" />
+        <div className="skel-grid">
+          {[1,2,3,4,5,6].map(i => (
+            <div key={i} className="skel-card">
+              <div className="skel-card__img" />
+              <div className="skel-card__body">
+                <div className="skel-line" style={{ width: '90%' }} />
+                <div className="skel-line" style={{ width: '70%' }} />
+                <div className="skel-line" style={{ width: '50%' }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  if (error) return <div className="news-error">{error}</div>;
+  if (!articles.length) return <div className="empty">No news available.</div>;
+
+  const sorted = [...articles];
+  if (src === 'top') sorted.sort((a, b) => (b.premium ? 1 : 0) - (a.premium ? 1 : 0));
+
+  const featured = sorted[0];
+  const grid = sorted.slice(1, 7);
+
+  const getCategory = (a) => {
+    const cats = a.categories || [];
+    if (cats.some(c => (c.description || '').toLowerCase().includes('trade'))) return 'Trade';
+    if (cats.some(c => (c.description || '').toLowerCase().includes('breaking'))) return 'Breaking';
+    return 'General';
+  };
+  const formatTime = (dateStr) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      const now = new Date();
+      const diff = Math.floor((now - d) / 60000);
+      if (diff < 60) return `${diff}m ago`;
+      if (diff < 1440) return `${Math.floor(diff / 60)}h ago`;
+      return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    } catch { return ''; }
+  };
+
+  return (
+    <div id="newsFeed">
+      {/* Featured */}
+      {featured && (
+        <a
+          href={featured.links?.web?.href || '#'}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="nc-featured"
+        >
+          {featured.images?.[0]?.url ? (
+            <div className="nc-featured__img" style={{ backgroundImage: `url(${featured.images[0].url})` }} />
+          ) : (
+            <div className="nc-no-img-placeholder">NBA</div>
+          )}
+          <div className="nc-featured__overlay">
+            <NewsTag category={getCategory(featured)} />
+            <div className="nc-featured__title">{featured.headline}</div>
+            <div className="nc-featured__meta">{featured.source || 'ESPN'} · {formatTime(featured.published)}</div>
+          </div>
+        </a>
+      )}
+      {/* Grid */}
+      <div className="nc-grid">
+        {grid.map((a, i) => (
+          <a key={i} href={a.links?.web?.href || '#'} target="_blank" rel="noopener noreferrer" className="nc-card">
+            {a.images?.[0]?.url ? (
+              <div className="nc-card__img" style={{ backgroundImage: `url(${a.images[0].url})` }}>
+                <NewsTag category={getCategory(a)} />
+              </div>
+            ) : (
+              <div className="nc-card__no-img">
+                NBA
+                <NewsTag category={getCategory(a)} />
+              </div>
+            )}
+            <div className="nc-card__body">
+              <div className="nc-card__title">{a.headline}</div>
+              <div className="nc-card__meta">
+                <span>{a.source || 'ESPN'}</span>
+                <span>·</span>
+                <span>{formatTime(a.published)}</span>
+              </div>
+            </div>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* Right panel tasks */
+function TasksPanel({ coins, tasks }) {
+  return (
+    <>
+      <div className="section-title" style={{ marginTop: 8 }}>
+        <div className="slash-accent"></div>
+        DAILY TASKS
+      </div>
+      <div id="rightPanelTasks">
+        {DAILY_TASK_DEFS.map(t => {
+          const done = tasks[t.key + '_done'];
+          return (
+            <div key={t.key} className={`rp-task-row${done ? ' done' : ''}`}>
+              <span className="rp-task-icon">{t.icon}</span>
+              <span className="rp-task-label">{t.label}</span>
+              <span className={`rp-task-reward${done ? ' done' : ''}`}>
+                {done ? '✓' : `+${t.reward}`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </>
   );
 }
 
@@ -130,205 +268,175 @@ export default function HomePage() {
 
   const selectedDateKey = toESPNDate(selectedDate);
   const isFuture = selectedDateKey > TODAY_KEY;
+  const hasLive = games.some(g => g.inProgress);
 
   const showToast = useCallback((msg) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 2250);
+    setToast(msg); setTimeout(() => setToast(null), 2250);
   }, []);
 
   const loadGames = useCallback(async (dateKey) => {
-    setLoading(true);
-    setError('');
+    setLoading(true); setError('');
     try {
       let g = gameCache.current[dateKey];
       if (!g) {
         g = await fetchGames(dateKey);
         gameCache.current[dateKey] = g;
-        if (dateKey <= TODAY_KEY && g.length) {
-          apiSettleBets(g).catch(() => {});
-        }
+        if (dateKey <= TODAY_KEY && g.length) apiSettleBets(g).catch(() => {});
       }
       setGames(g);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
   }, []);
 
-  // Initial load
   useEffect(() => {
     loadGames(TODAY_KEY);
+    // Load coins + bets
+    apiGetCoins().then(d => { setCoins(d.coins ?? 0); setTaskState(d.tasks || {}); }).catch(() => {});
+    apiGetAllBets().then(setAllBets).catch(() => {});
     // Prefetch adjacent days
     const yIdx = TODAY_IDX - 1;
     if (yIdx >= 0) {
       const yKey = toESPNDate(ALL_DAYS[yIdx]);
-      fetchGames(yKey).then(g => {
-        gameCache.current[yKey] = g;
-        if (g.length) apiSettleBets(g).catch(() => {});
-      }).catch(() => {});
+      fetchGames(yKey).then(g => { gameCache.current[yKey] = g; if (g.length) apiSettleBets(g).catch(() => {}); }).catch(() => {});
     }
     const tIdx = TODAY_IDX + 1;
     if (tIdx < ALL_DAYS.length) {
       const tKey = toESPNDate(ALL_DAYS[tIdx]);
       fetchGames(tKey).then(g => { gameCache.current[tKey] = g; }).catch(() => {});
     }
+    // Claim login task
+    apiClaimTask('login').then(res => {
+      if (res?.ok) { setCoins(res.coins); setTaskState(s => ({ ...s, login_done: true })); showToast('+20 coins · Daily login!'); }
+    }).catch(() => {});
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Scroll today into view
   useEffect(() => {
     if (calRef.current) {
-      const todayEl = calRef.current.querySelector(`[data-date="${TODAY_KEY}"]`);
-      if (todayEl) todayEl.scrollIntoView({ inline: 'center', behavior: 'auto' });
+      const el = calRef.current.querySelector(`[data-date="${TODAY_KEY}"]`);
+      if (el) el.scrollIntoView({ inline: 'center', behavior: 'auto' });
     }
   }, []);
 
   function handleDayClick(day) {
-    setSelectedDate(day);
-    loadGames(toESPNDate(day));
+    setSelectedDate(day); loadGames(toESPNDate(day));
   }
 
   async function handleShare(game) {
     const url = `${location.origin}/game?id=${game.id}&date=${selectedDateKey}`;
-    if (navigator.share) {
-      navigator.share({ title: `SCORE · ${game.away.abbr} vs ${game.home.abbr}`, url }).catch(() => {});
-    } else {
-      navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => {});
-    }
+    if (navigator.share) navigator.share({ title: `SCORE · ${game.away.abbr} vs ${game.home.abbr}`, url }).catch(() => {});
+    else navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => {});
     try {
       const res = await apiClaimTask('share');
-      if (res?.ok) {
-        setTaskState(s => ({ ...s, share_done: true }));
-        setCoins(res.coins);
-        showToast('+50 coins · Shared a game!');
-      }
+      if (res?.ok) { setTaskState(s => ({ ...s, share_done: true })); setCoins(res.coins); showToast('+50 coins · Shared a game!'); }
     } catch (_) {}
   }
 
-  const sectionLabel = (() => {
-    if (selectedDateKey === TODAY_KEY) return "Today's Games";
-    return selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
-  })();
+  const sectionLabel = selectedDateKey === TODAY_KEY ? 'NBA GAMES' : selectedDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }).toUpperCase();
 
   return (
-    <div className="page">
-      <Header />
+    <div className="app-container">
+      <Header searchPlaceholder="Search players, teams, stats..." />
 
-      <div style={{ padding: '2.5rem 0 1.5rem', marginBottom: '1rem', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1.5rem', flexWrap: 'wrap' }}>
-        <div>
-          <div style={{ fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ display: 'inline-block', width: 18, height: 2, background: 'var(--accent)', borderRadius: 1 }} />
-            Real-time NBA Data
+      <SideNav />
+
+      {/* Panel Matches: Calendar + Game List */}
+      <aside className="panel-matches">
+        <div className="panel-top">
+          <div className="panel-header">
+            <h3 id="sectionDateLabel">{sectionLabel}</h3>
+            {hasLive && <div className="live-tag"><span>• LIVE</span></div>}
           </div>
-          <h1 style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 'clamp(2.6rem, 6vw, 4.5rem)', letterSpacing: '0.06em', lineHeight: 1, marginBottom: '0.4rem' }}>
-            NBA<br />
-            <span style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-2))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Games</span>
-          </h1>
-          <p style={{ color: 'var(--text-sub)', fontSize: '0.9rem' }}>Live scores · Boxscores · Fan ratings · Score Coin predictions</p>
-        </div>
-        {coins !== null && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem', flexShrink: 0 }}>
-            <div style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>Score Coin</div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.8rem', lineHeight: 1, color: 'var(--accent-2)' }}>
-              <span>SC</span>
-              <span>{coins}</span>
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Predict &amp; win coins</div>
+          {/* Calendar Strip */}
+          <div className="cal-strip" ref={calRef}>
+            {ALL_DAYS.map((day, i) => {
+              const key = toESPNDate(day);
+              const isToday = key === TODAY_KEY;
+              const isDayFuture = key > TODAY_KEY;
+              const isActive = key === selectedDateKey;
+              const hasBet = (gameCache.current[key] || []).some(g => allBets.some(b => b.game_id === g.id));
+              const hasGames = (gameCache.current[key] || []).length > 0;
+
+              return (
+                <div key={key} style={{ display: 'flex', alignItems: 'center' }}>
+                  {i === TODAY_IDX && i > 0 && (
+                    <div className="cal-divider"><div className="cal-divider__line" /></div>
+                  )}
+                  <div
+                    data-date={key}
+                    className={`cal-day${isActive ? ' active' : ''}${isDayFuture ? ' future' : ''}${hasBet ? ' has-bet' : ''}${hasGames ? ' has-games' : ''}`}
+                    onClick={() => handleDayClick(day)}
+                  >
+                    <div className="cal-day__dow">{isToday ? 'TOD' : DOW[day.getDay()].slice(0,3)}</div>
+                    <div className="cal-day__num">{day.getDate()}</div>
+                    <div className="cal-day__dot" />
+                    <div className="cal-day__bet-dot" />
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        )}
-      </div>
-
-      {/* Calendar strip */}
-      <div ref={calRef} style={{ display: 'flex', gap: '0.4rem', overflowX: 'auto', paddingBottom: '0.5rem', marginBottom: '2rem', scrollbarWidth: 'none' }}>
-        {ALL_DAYS.map((day, i) => {
-          const key = toESPNDate(day);
-          const isToday = key === TODAY_KEY;
-          const isDayFuture = key > TODAY_KEY;
-          const isActive = key === selectedDateKey;
-          const hasBet = (gameCache.current[key] || []).some(g => allBets.some(b => b.game_id === g.id));
-
-          return (
-            <div key={key} style={{ display: 'flex', alignItems: 'center' }}>
-              {i === TODAY_IDX && i > 0 && (
-                <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 0.2rem' }}>
-                  <div style={{ width: 1, height: 36, background: 'var(--border-mid)', opacity: 0.5 }} />
-                </div>
-              )}
-              <div
-                data-date={key}
-                onClick={() => handleDayClick(day)}
-                style={{
-                  flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center',
-                  padding: '0.5rem 0.85rem', borderRadius: 'var(--radius-md)', minWidth: 54,
-                  cursor: 'pointer', userSelect: 'none', position: 'relative',
-                  background: isActive ? (isDayFuture ? 'var(--blue-glow)' : 'var(--accent-glow)') : (isDayFuture ? 'rgba(59,130,246,.04)' : 'var(--bg-card)'),
-                  border: `1px solid ${isActive ? (isDayFuture ? 'rgba(59,130,246,.5)' : 'rgba(255,107,43,.4)') : (isDayFuture ? 'rgba(59,130,246,.2)' : 'var(--border)')}`,
-                  transition: 'all .18s',
-                }}
-              >
-                <div style={{ fontSize: '0.65rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '0.2rem', color: isActive ? (isDayFuture ? 'var(--blue)' : 'var(--accent)') : 'var(--text-muted)' }}>
-                  {isToday ? 'Today' : DOW[day.getDay()]}
-                </div>
-                <div style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '1.3rem', lineHeight: 1, color: isActive ? (isDayFuture ? 'var(--blue)' : 'var(--accent)') : 'var(--text)' }}>
-                  {day.getDate()}
-                </div>
-                {hasBet && (
-                  <div style={{ position: 'absolute', top: 4, right: 6, width: 5, height: 5, borderRadius: '50%', background: 'var(--accent-2)' }} />
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Games section */}
-      <section style={{ marginBottom: '3rem' }}>
-        <div style={{ fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--text-muted)', marginBottom: '1rem', paddingBottom: '0.5rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span>
-            {sectionLabel}
-            {isFuture && <span style={{ color: 'var(--blue)' }}> · Upcoming</span>}
-          </span>
-          {!loading && <span>{games.length} game{games.length !== 1 ? 's' : ''}</span>}
         </div>
 
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-            <div style={{ display: 'inline-block', width: 28, height: 28, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin .7s linear infinite', marginBottom: '0.75rem' }} />
-            <br />Loading games…
+        {/* Games list */}
+        <div className="panel-games-scroll">
+          <div id="gamesContainer">
+            {loading ? (
+              <div className="loading"><div className="loading__spinner" /><br />Loading games…</div>
+            ) : error ? (
+              <div className="empty">Failed to load. {error}</div>
+            ) : games.length === 0 ? (
+              <div className="empty">No games scheduled.</div>
+            ) : (
+              games.map(g => (
+                <GameCard
+                  key={g.id}
+                  game={g}
+                  isFuture={isFuture}
+                  allBets={allBets}
+                  selectedDateKey={selectedDateKey}
+                  onShare={handleShare}
+                  navigate={navigate}
+                />
+              ))
+            )}
           </div>
-        ) : error ? (
-          <div className="empty">Failed to load games.<br /><small>{error}</small></div>
-        ) : games.length === 0 ? (
-          <div className="empty">No games scheduled for this date.</div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '0.85rem' }}>
-            {games.map(g => (
-              <GameCard
-                key={g.id}
-                game={g}
-                isFuture={isFuture}
-                allBets={allBets}
-                selectedDateKey={selectedDateKey}
-                onShare={handleShare}
-                navigate={navigate}
-              />
-            ))}
-          </div>
-        )}
-      </section>
-
-      <footer className="site-footer">SCORE · NBA · Powered by ESPN · Data for reference only · Score Coin is virtual currency with no real-world value</footer>
-
-      <TasksPanel
-        onCoinsUpdate={setCoins}
-        onBetsUpdate={setAllBets}
-      />
-
-      {toast && (
-        <div style={{ position: 'fixed', bottom: '6.5rem', right: '1.5rem', zIndex: 300, background: 'linear-gradient(135deg, var(--accent), var(--accent-2))', color: '#fff', fontWeight: 700, fontSize: '0.88rem', padding: '0.5rem 1rem', borderRadius: 'var(--radius-pill)', boxShadow: '0 4px 16px rgba(255,107,43,.4)', pointerEvents: 'none' }}>
-          {toast}
         </div>
-      )}
+      </aside>
+
+      {/* Main Stage: News Feed */}
+      <main className="main-stage">
+        <div className="news-header">
+          <div className="news-header__title">
+            <div className="slash-accent"></div>
+            <span className="news-header__label">NBA NEWS</span>
+            <div className="news-live-dot"></div>
+          </div>
+          <div className="news-source-tabs">
+            <Link to="/news" className="news-source-tab active" style={{ textDecoration: 'none' }}>MORE →</Link>
+          </div>
+        </div>
+        <NewsFeed />
+      </main>
+
+      {/* Panel Social: Coins + Tasks */}
+      <aside className="panel-social">
+        <div className="section-title">
+          <div className="slash-accent"></div>
+          SCORE COIN
+        </div>
+        <div className="coin-widget">
+          <div className="coin-widget__dots"></div>
+          <div className="coin-widget__amount">
+            <span className="coin-widget__symbol">SC</span>
+            <span className="coin-widget__num" id="coinBalance">{coins !== null ? coins.toLocaleString() : '—'}</span>
+          </div>
+          <div className="coin-widget__sub">Predict &amp; win coins</div>
+        </div>
+
+        <TasksPanel coins={coins} tasks={taskState} />
+      </aside>
+
+      {toast && <div className="coin-toast">{toast}</div>}
     </div>
   );
 }

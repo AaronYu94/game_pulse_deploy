@@ -115,6 +115,9 @@ export async function apiPostReply(topicId, content, quoteAuthor = null, quoteTe
 export async function apiLikeReply(postId) {
   return apiFetch(`/api/forum/replies/${postId}/like`, { method: 'POST', body: {} });
 }
+export async function apiDislikeReply(postId) {
+  return apiFetch(`/api/forum/replies/${postId}/dislike`, { method: 'POST', body: {} });
+}
 
 // Shop
 export async function apiGetShop() {

@@ -1,619 +1,415 @@
-import { useState, useEffect, useRef } from 'react';
-import Header from '../components/Header.jsx';
-import { apiGetTopics, apiCreateTopic, apiGetTopic, apiPostReply, apiLikeReply } from '../lib/api.js';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import Header, { SideNav } from '../components/Header.jsx';
+import {
+  apiGetTopics, apiCreateTopic, apiGetTopic, apiPostReply,
+  apiLikeReply, apiDislikeReply,
+} from '../lib/api.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { getEquippedFrame, getFrameById } from '../lib/espn.js';
 
-// ── constants ───────────────────────────────────────────────────────────────
-
-const CATEGORIES = [
-  { key: 'all',       label: 'All'       },
-  { key: 'general',   label: 'General'   },
-  { key: 'hot-takes', label: 'Hot Takes' },
-  { key: 'analysis',  label: 'Analysis'  },
-  { key: 'trades',    label: 'Trade Talk'},
-  { key: 'fantasy',   label: 'Fantasy'   },
+const CAT_TABS = [
+  { key: 'all', label: 'All' },
+  { key: 'totd', label: 'Topic of the Day' },
+  { key: 'game', label: 'Games' },
+  { key: 'player', label: 'Players' },
+  { key: 'trade', label: 'Trade' },
+  { key: 'chat', label: 'Chat' },
 ];
 
-const SORTS = [
-  { key: 'latest', label: 'Latest' },
-  { key: 'hot',    label: 'Most Active' },
-  { key: 'new',    label: 'Newest' },
-  { key: 'views',  label: 'Most Viewed' },
+const CAT_LABELS = { game: 'Games', player: 'Players', trade: 'Trade', chat: 'Chat', totd: 'TOTD' };
+
+const DAILY_TOPICS = [
+  { q: "Who is the best point guard in the league right now?", sub: "Stats, impact, leadership — make your case." },
+  { q: "Which team has the best shot at the championship this year?", sub: "Break down the matchups, rosters, and health." },
+  { q: "Is load management ruining the NBA fan experience?", sub: "Stars sitting out big games — smart strategy or disrespect to fans?" },
+  { q: "Prime MJ vs. prime LeBron, 1-on-1 — who wins?", sub: "The eternal debate. Pick your side and defend it." },
+  { q: "Which young star will be the face of the NBA in 5 years?", sub: "Name your pick and tell us why." },
+  { q: "Best NBA Finals of the last decade — which one?", sub: "Pick the series that had you glued to the screen." },
+  { q: "Should the NBA expand, and if so, where?", sub: "New cities, new markets — make your case." },
+  { q: "Who deserves a Hall of Fame spot but hasn't gotten one?", sub: "Overlooked legends — give them their flowers." },
+  { q: "Which NBA team has the best fans?", sub: "Atmosphere, loyalty, passion — who tops the list?" },
+  { q: "Best shooter in NBA history: Curry or someone else?", sub: "Redefining the three-point game — is it Steph?" },
+  { q: "What's the most overhyped rivalry in NBA history?", sub: "More media narrative than real beef — which one?" },
+  { q: "Biggest draft bust of all time — who takes the crown?", sub: "Expectations vs. reality. Who disappointed the most?" },
+  { q: "Which coach has had the biggest impact on the modern NBA?", sub: "Systems, development, culture — who changed basketball?" },
+  { q: "Clutch shot, down by 1, 5 seconds left — who do you want?", sub: "Kobe, LeBron, Curry, or someone else entirely?" },
+  { q: "Which current team is the biggest disappointment this season?", sub: "Expected more — who has let you down the most?" },
 ];
 
-const CAT_MAP = Object.fromEntries(CATEGORIES.map(c => [c.key, c]));
-
-// ── helpers ────────────────────────────────────────────────────────────────
-
-function timeAgo(ts) {
-  const d = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
-  if (d < 60)          return 'just now';
-  if (d < 3600)        return `${Math.floor(d / 60)}m ago`;
-  if (d < 86400)       return `${Math.floor(d / 3600)}h ago`;
-  if (d < 86400 * 7)   return `${Math.floor(d / 86400)}d ago`;
-  return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+function getTodayTopic() {
+  const now = new Date();
+  const start = new Date(now.getFullYear(), 0, 0);
+  const dayOfYear = Math.floor((now - start) / 86400000);
+  return DAILY_TOPICS[dayOfYear % DAILY_TOPICS.length];
 }
 
-function fmtViews(n) {
-  if (!n) return '0';
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const AVATAR_COLORS = [
-  '#e05c2e','#e0922e','#c4b02a','#3a9e5f','#2e8fc4',
-  '#5c6bc0','#8e44ad','#c0392b','#16a085','#2980b9',
-];
-function avatarColor(username = '') {
-  let h = 0;
-  for (let i = 0; i < username.length; i++) h = username.charCodeAt(i) + ((h << 5) - h);
-  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length];
+function CatBadge({ cat }) {
+  const map = { game: 'cat-badge--game', player: 'cat-badge--player', trade: 'cat-badge--trade', chat: 'cat-badge--chat', totd: 'cat-badge--totd' };
+  return <span className={`cat-badge ${map[cat] || ''}`}>{CAT_LABELS[cat] || cat}</span>;
 }
 
-function Avatar({ username, size = 36 }) {
-  const initial = (username || '?')[0].toUpperCase();
-  return (
-    <div style={{
-      width: size, height: size, borderRadius: '50%',
-      background: avatarColor(username),
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      fontFamily: "'Bebas Neue', sans-serif", fontSize: size * 0.44,
-      color: '#fff', flexShrink: 0, userSelect: 'none',
-    }}>
-      {initial}
-    </div>
-  );
-}
-
-function Spinner() {
-  return (
-    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-      <div style={{ display: 'inline-block', width: 28, height: 28, border: '2px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin .7s linear infinite', marginBottom: '0.75rem' }} />
-      <br />Loading…
-    </div>
-  );
-}
-
-function CategoryBadge({ catKey, small }) {
-  const cat = CAT_MAP[catKey] || CAT_MAP['general'];
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '0.25rem',
-      fontSize: small ? '0.6rem' : '0.65rem', fontWeight: 700,
-      padding: small ? '0.08rem 0.35rem' : '0.12rem 0.45rem',
-      borderRadius: 'var(--radius-pill)',
-      background: 'var(--bg-surface)', border: '1px solid var(--border)',
-      color: 'var(--text-sub)', whiteSpace: 'nowrap', letterSpacing: '0.02em',
-    }}>
-      {cat.label}
-    </span>
-  );
-}
-
-// ── Topic list ─────────────────────────────────────────────────────────────
-
-function TopicList({ cat, sort, q, onSelect }) {
-  const [topics,     setTopics]     = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [showNew,    setShowNew]    = useState(false);
-  const [reloadTick, setReloadTick] = useState(0);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    apiGetTopics({ cat, sort, q })
-      .then(t  => { if (!cancelled) { setTopics(t); setLoading(false); } })
-      .catch(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [cat, sort, q, reloadTick]);
-
-  function onCreated(id) {
-    setShowNew(false);
-    setReloadTick(n => n + 1);
-    onSelect(id);
-  }
-
-  return (
-    <div>
-      {/* Column headers */}
-      {!loading && topics.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 56px 56px 56px', gap: '0 0.75rem', padding: '0 1rem 0.5rem', fontSize: '0.62rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--text-muted)', borderBottom: '1px solid var(--border)', marginBottom: '0.25rem' }}>
-          <span>Topic</span>
-          <span style={{ textAlign: 'center' }}>Views</span>
-          <span style={{ textAlign: 'center' }}>Replies</span>
-          <span style={{ textAlign: 'center' }}>Activity</span>
-        </div>
-      )}
-
-      {loading ? <Spinner /> : topics.length === 0 ? (
-        <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-          {q ? `No topics matching "${q}"` : 'No topics yet — start the conversation!'}
-        </div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
-          {topics.map(t => {
-            const isHot  = (t.reply_count ?? 0) >= 8;
-            const isNew  = (Date.now() - new Date(t.created_at).getTime()) < 1000 * 60 * 60 * 6;
-            const preview = (t.body || '').replace(/\s+/g, ' ').slice(0, 90) + (t.body?.length > 90 ? '…' : '');
-            return (
-              <div
-                key={t.id}
-                onClick={() => onSelect(t.id)}
-                style={{
-                  display: 'grid', gridTemplateColumns: '1fr 56px 56px 56px', gap: '0 0.75rem',
-                  padding: '0.85rem 1rem', alignItems: 'center', cursor: 'pointer',
-                  borderBottom: '1px solid var(--border)',
-                  background: 'transparent', transition: 'background .15s',
-                }}
-                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-card)'}
-                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-              >
-                {/* Left: avatar + title + meta */}
-                <div style={{ display: 'flex', gap: '0.85rem', alignItems: 'flex-start', minWidth: 0 }}>
-                  <Avatar username={t.author_name || t.username} size={38} />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.18rem' }}>
-                      <span style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text)', lineHeight: 1.3 }}>{t.title}</span>
-                      {isHot && <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '0.08rem 0.4rem', borderRadius: 'var(--radius-pill)', background: 'rgba(255,107,43,.15)', color: 'var(--accent)', border: '1px solid rgba(255,107,43,.25)', whiteSpace: 'nowrap' }}>HOT</span>}
-                      {isNew && <span style={{ fontSize: '0.6rem', fontWeight: 700, padding: '0.08rem 0.4rem', borderRadius: 'var(--radius-pill)', background: 'var(--blue-glow)', color: 'var(--blue)', border: '1px solid rgba(59,130,246,.25)', whiteSpace: 'nowrap' }}>NEW</span>}
-                    </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.25rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                      {preview}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-                      <CategoryBadge catKey={t.category} small />
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-sub)', fontWeight: 600 }}>{t.author_name || t.username}</span>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', opacity: 0.5 }}>·</span>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{timeAgo(t.created_at)}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Views */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{fmtViews(t.views)}</div>
-                </div>
-
-                {/* Replies */}
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '1.2rem', lineHeight: 1, color: (t.reply_count ?? 0) > 0 ? 'var(--text)' : 'var(--text-muted)' }}>{t.reply_count ?? 0}</div>
-                </div>
-
-                {/* Activity */}
-                <div style={{ textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
-                  {t.last_reply_at ? timeAgo(t.last_reply_at) : timeAgo(t.created_at)}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* New topic FAB */}
-      {showNew && (
-        <NewTopicModal onClose={() => setShowNew(false)} onCreated={onCreated} />
-      )}
-      <button
-        onClick={() => setShowNew(true)}
-        style={{
-          position: 'fixed', bottom: '2rem', right: '2rem',
-          background: 'linear-gradient(135deg, var(--accent), var(--accent-2))',
-          color: '#fff', border: 'none', borderRadius: '50px',
-          padding: '0.75rem 1.4rem', fontFamily: "'Bebas Neue',sans-serif",
-          fontSize: '1rem', letterSpacing: '0.08em', cursor: 'pointer',
-          boxShadow: '0 4px 20px rgba(255,107,43,.4)', transition: 'transform .15s, box-shadow .15s',
-          zIndex: 100,
-        }}
-        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 28px rgba(255,107,43,.5)'; }}
-        onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = '0 4px 20px rgba(255,107,43,.4)'; }}
-      >
-        + New Topic
-      </button>
-    </div>
-  );
-}
-
-// ── New topic modal ─────────────────────────────────────────────────────────
-
-function NewTopicModal({ onClose, onCreated }) {
-  const [title,    setTitle]    = useState('');
-  const [body,     setBody]     = useState('');
-  const [category, setCategory] = useState('general');
-  const [creating, setCreating] = useState(false);
-  const ref = useRef();
-
-  useEffect(() => {
-    function onKey(e) { if (e.key === 'Escape') onClose(); }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  async function handleCreate(e) {
-    e.preventDefault();
-    if (!title.trim() || !body.trim()) return;
-    setCreating(true);
-    try {
-      const res = await apiCreateTopic(title.trim(), body.trim(), category);
-      onCreated(res.topic.id);
-    } catch (_) {}
-    setCreating(false);
-  }
+function PostItem({ post, currentUser, onLike, onDislike }) {
+  const author = post.author_name || 'Anonymous';
+  const initials = author.slice(0, 2).toUpperCase();
+  const equippedId = getEquippedFrame();
+  const frame = (currentUser && currentUser.username === author && equippedId) ? getFrameById(equippedId) : null;
 
   return (
     <div
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
+      className="post-item"
+      style={frame ? { borderLeft: `3px solid ${frame.bg}`, background: `${frame.bg}14`, position: 'relative' } : { position: 'relative' }}
     >
-      <div ref={ref} className="card" style={{ width: '100%', maxWidth: 560, padding: '2rem', position: 'relative', overflow: 'hidden', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), var(--accent-2))' }} />
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
-          <div style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: '1.4rem', letterSpacing: '0.06em' }}>Start a Discussion</div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem', padding: '0.25rem 0.5rem' }}>✕</button>
+      {frame && (
+        <div style={{
+          position: 'absolute', top: 8, right: 10, width: 22, height: 22, borderRadius: '50%',
+          background: frame.bg, color: frame.text, display: 'flex', alignItems: 'center',
+          justifyContent: 'center', fontSize: 8, fontWeight: 900, fontFamily: 'var(--f-display)',
+        }}>{frame.abbr}</div>
+      )}
+      <div
+        className="post-avatar"
+        style={frame ? { background: frame.bg, color: frame.text } : {}}
+      >{initials}</div>
+      <div className="post-item__body">
+        <div className="post-item__header">
+          <span className="post-item__author" style={frame ? { color: frame.bg } : {}}>@{author}</span>
+          <span className="dot">·</span>
+          <span className="post-item__time">{timeAgo(post.created_at)}</span>
         </div>
-        <form onSubmit={handleCreate}>
-          {/* Category picker */}
-          <div className="form-group">
-            <label className="form-label">Category</label>
-            <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-              {CATEGORIES.filter(c => c.key !== 'all').map(c => (
-                <button
-                  key={c.key} type="button"
-                  onClick={() => setCategory(c.key)}
-                  style={{
-                    padding: '0.35rem 0.75rem', borderRadius: 'var(--radius-pill)',
-                    border: `1px solid ${category === c.key ? 'var(--accent)' : 'var(--border)'}`,
-                    background: category === c.key ? 'var(--accent-glow)' : 'var(--bg-surface)',
-                    color: category === c.key ? 'var(--accent)' : 'var(--text-muted)',
-                    cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, fontFamily: 'inherit',
-                    transition: 'all .15s',
-                  }}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Title</label>
-            <input type="text" className="form-input" value={title} onChange={e => setTitle(e.target.value)} placeholder="What do you want to talk about?" maxLength={80} autoFocus />
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.3rem', textAlign: 'right' }}>{title.length}/80</div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Body</label>
-            <textarea value={body} onChange={e => setBody(e.target.value)} placeholder="Share your thoughts in detail…" rows={6} style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text)', fontFamily: 'inherit', fontSize: '0.9rem', padding: '0.75rem', resize: 'vertical', outline: 'none', boxSizing: 'border-box', lineHeight: 1.6, transition: 'border-color .15s' }} onFocus={e => e.target.style.borderColor = 'var(--accent)'} onBlur={e => e.target.style.borderColor = 'var(--border)'} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.5rem' }}>
-            <button type="button" onClick={onClose} className="btn">Cancel</button>
-            <button type="submit" className="btn btn--primary" disabled={creating || !title.trim() || !body.trim()}>
-              {creating ? 'Posting…' : 'Post Topic'}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ── Thread view ────────────────────────────────────────────────────────────
-
-function PostCard({ post, index, isOP, onLike, onQuote }) {
-  return (
-    <div style={{ display: 'flex', gap: '1rem', padding: '1.25rem 0', borderBottom: '1px solid var(--border)' }}>
-      {/* Sidebar */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', width: 64, flexShrink: 0 }}>
-        <Avatar username={post.author_name || post.username} size={44} />
-        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-sub)', textAlign: 'center', wordBreak: 'break-word' }}>{post.author_name || post.username}</div>
-        {isOP && (
-          <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent)', background: 'var(--accent-glow)', border: '1px solid rgba(255,107,43,.25)', borderRadius: 'var(--radius-pill)', padding: '0.1rem 0.4rem', whiteSpace: 'nowrap' }}>OP</div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem', gap: '0.5rem' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{timeAgo(post.created_at)}</span>
-          <span style={{ fontSize: '0.7rem', color: 'var(--border-mid)', fontFamily: 'monospace' }}>#{index + 1}</span>
-        </div>
-
-        {/* Quoted content (persisted in DB) */}
-        {post.quote_author && post.quote_text && (
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', borderRadius: '0 var(--radius-md) var(--radius-md) 0', padding: '0.6rem 0.85rem', marginBottom: '0.75rem', fontSize: '0.85rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent)', marginBottom: '0.3rem', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              {post.quote_author} wrote:
-            </div>
-            <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{post.quote_text}</div>
-          </div>
-        )}
-
-        <div style={{ fontSize: '0.95rem', color: 'var(--text)', lineHeight: 1.7, marginBottom: '0.85rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-          {post.content}
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end' }}>
+        <div className="post-item__content" style={{ whiteSpace: 'pre-wrap' }}>{post.content}</div>
+        <div className="post-item__actions">
           <button
-            onClick={() => onQuote(post)}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-pill)', padding: '0.25rem 0.65rem', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.78rem', fontWeight: 600, fontFamily: 'inherit', transition: 'all .15s' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-          >
-            ↩ Quote
-          </button>
-          <button
+            className={`vote-btn vote-btn--up${post.liked_by_me ? ' active' : ''}`}
             onClick={() => onLike(post.id)}
-            style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: post.liked_by_me ? 'rgba(239,68,68,.1)' : 'none', border: `1px solid ${post.liked_by_me ? 'rgba(239,68,68,.3)' : 'var(--border)'}`, borderRadius: 'var(--radius-pill)', padding: '0.25rem 0.65rem', cursor: 'pointer', color: post.liked_by_me ? 'var(--heat)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, fontFamily: 'inherit', transition: 'all .15s' }}
+            title="Upvote"
           >
-            ♥ {post.likes ?? 0}
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
+            <span>{post.likes || 0}</span>
+          </button>
+          <button
+            className={`vote-btn vote-btn--down${post.disliked_by_me ? ' active' : ''}`}
+            onClick={() => onDislike(post.id)}
+            title="Downvote"
+          >
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
           </button>
         </div>
       </div>
     </div>
   );
 }
-
-function ThreadView({ topicId, onBack }) {
-  const { user } = useAuth();
-  const [data,       setData]       = useState(null);
-  const [loading,    setLoading]    = useState(true);
-  const [content,    setContent]    = useState('');
-  const [quote,      setQuote]      = useState(null); // { author, text }
-  const [submitting, setSubmitting] = useState(false);
-  const textareaRef = useRef();
-
-  useEffect(() => {
-    apiGetTopic(topicId)
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
-  }, [topicId]);
-
-  function handleQuote(post) {
-    const author  = post.author_name || post.username || '';
-    const full    = post.content || '';
-    const text    = full.length > 200 ? full.slice(0, 200) + '…' : full;
-    setQuote({ author, text });
-    setTimeout(() => {
-      textareaRef.current?.focus();
-      textareaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    }, 50);
-  }
-
-  async function reply(e) {
-    e.preventDefault();
-    if (!content.trim()) return;
-    setSubmitting(true);
-    try {
-      const res = await apiPostReply(
-        topicId,
-        content.trim(),
-        quote?.author || null,
-        quote?.text   || null,
-      );
-      setData(prev => ({ ...prev, posts: [...(prev.posts || []), res.post] }));
-      setContent('');
-      setQuote(null);
-    } catch (_) {}
-    setSubmitting(false);
-  }
-
-  async function likePost(postId) {
-    try {
-      await apiLikeReply(postId);
-      setData(prev => ({
-        ...prev,
-        posts: prev.posts.map(p => {
-          if (p.id !== postId) return p;
-          const wasLiked = !!p.liked_by_me;
-          return { ...p, likes: wasLiked ? (p.likes ?? 0) - 1 : (p.likes ?? 0) + 1, liked_by_me: !wasLiked };
-        }),
-      }));
-    } catch (_) {}
-  }
-
-  if (loading) return <Spinner />;
-
-  const topic    = data?.topic;
-  const posts    = data?.posts || [];
-  const opUsername = topic?.author_name || topic?.username;
-
-  return (
-    <div>
-      {/* Breadcrumb */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.5rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-        <button onClick={onBack} style={{ background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', padding: 0 }}>Forum</button>
-        <span>/</span>
-        {topic?.category && <CategoryBadge catKey={topic.category} small />}
-        <span style={{ color: 'var(--text-sub)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{topic?.title}</span>
-      </div>
-
-      {/* Topic title + stats bar */}
-      {topic && (
-        <div style={{ marginBottom: '0.5rem' }}>
-          <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 'clamp(1.4rem,4vw,2.2rem)', letterSpacing: '0.06em', lineHeight: 1.2, marginBottom: '0.6rem' }}>{topic.title}</h1>
-          <div style={{ display: 'flex', gap: '1rem', fontSize: '0.78rem', color: 'var(--text-muted)', paddingBottom: '0.75rem', borderBottom: '1px solid var(--border)', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span>by <strong style={{ color: 'var(--text-sub)' }}>{opUsername}</strong></span>
-            <span>{timeAgo(topic.created_at)}</span>
-            <span>{posts.length} repl{posts.length !== 1 ? 'ies' : 'y'}</span>
-            <span>{fmtViews(topic.views)} views</span>
-          </div>
-        </div>
-      )}
-
-      {/* OP post */}
-      {topic && (
-        <div style={{ display: 'flex', gap: '1rem', padding: '1.25rem 0', borderBottom: '1px solid var(--border)', background: 'rgba(255,107,43,.03)', borderRadius: '0 0 var(--radius-md) var(--radius-md)' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem', width: 64, flexShrink: 0 }}>
-            <Avatar username={opUsername} size={44} />
-            <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-sub)', textAlign: 'center', wordBreak: 'break-word' }}>{opUsername}</div>
-            <div style={{ fontSize: '0.6rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--accent)', background: 'var(--accent-glow)', border: '1px solid rgba(255,107,43,.25)', borderRadius: 'var(--radius-pill)', padding: '0.1rem 0.4rem' }}>OP</div>
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{timeAgo(topic.created_at)}</span>
-              <button
-                onClick={() => handleQuote({ author_name: opUsername, content: topic.body })}
-                style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius-pill)', padding: '0.2rem 0.55rem', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '0.75rem', fontWeight: 600, fontFamily: 'inherit', transition: 'all .15s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--text-muted)'; }}
-              >
-                ↩ Quote
-              </button>
-            </div>
-            <div style={{ fontSize: '0.97rem', color: 'var(--text)', lineHeight: 1.75, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{topic.body}</div>
-          </div>
-        </div>
-      )}
-
-      {/* Replies */}
-      {posts.length === 0 ? (
-        <div style={{ padding: '2rem 0', color: 'var(--text-muted)', fontSize: '0.9rem' }}>No replies yet — be the first.</div>
-      ) : (
-        posts.map((p, i) => (
-          <PostCard key={p.id} post={p} index={i} isOP={(p.author_name || p.username) === opUsername} onLike={likePost} onQuote={handleQuote} />
-        ))
-      )}
-
-      {/* Reply form */}
-      <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
-          <Avatar username={user?.username} size={44} />
-          <form onSubmit={reply} style={{ flex: 1 }}>
-            {/* Quote preview */}
-            {quote && (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.5rem', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderLeft: '3px solid var(--accent)', borderRadius: '0 var(--radius-md) var(--radius-md) 0', padding: '0.6rem 0.85rem', marginBottom: '0.6rem', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--accent)', marginBottom: '0.2rem', textTransform: 'uppercase' }}>{quote.author} wrote:</div>
-                  <div style={{ lineHeight: 1.5, wordBreak: 'break-word' }}>{quote.text}</div>
-                </div>
-                <button type="button" onClick={() => setQuote(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem', padding: '0 0.25rem', flexShrink: 0 }}>✕</button>
-              </div>
-            )}
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={e => setContent(e.target.value)}
-              placeholder={quote ? `Replying to ${quote.author}…` : 'Write a reply…'}
-              rows={4}
-              style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text)', fontFamily: 'inherit', fontSize: '0.9rem', padding: '0.85rem', resize: 'vertical', outline: 'none', boxSizing: 'border-box', lineHeight: 1.6, transition: 'border-color .15s' }}
-              onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-              onBlur={e => e.target.style.borderColor = 'var(--border)'}
-            />
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.6rem' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{content.length > 0 ? `${content.length} chars` : ''}</span>
-              <button type="submit" className="btn btn--primary" disabled={submitting || !content.trim()}>
-                {submitting ? 'Posting…' : 'Post Reply'}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Page ───────────────────────────────────────────────────────────────────
 
 export default function ForumPage() {
-  const [selectedTopicId, setSelectedTopicId] = useState(null);
-  const [activeCat,  setActiveCat]  = useState('all');
-  const [activeSort, setActiveSort] = useState('latest');
-  const [searchQ,    setSearchQ]    = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const searchTimer = useRef(null);
+  const { user } = useAuth();
+  const [cat, setCat] = useState('all');
+  const [topics, setTopics] = useState([]);
+  const [topicsLoading, setTopicsLoading] = useState(true);
+  const [activeTopic, setActiveTopic] = useState(null);
+  const [threadLoading, setThreadLoading] = useState(false);
+  const [posts, setPosts] = useState([]);
+  const [showNewForm, setShowNewForm] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [newBody, setNewBody] = useState('');
+  const [newCat, setNewCat] = useState('chat');
+  const [submitting, setSubmitting] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const [replySubmitting, setReplySubmitting] = useState(false);
+  const [toast, setToast] = useState('');
+  const todayTopic = getTodayTopic();
 
-  function handleSearchInput(val) {
-    setSearchInput(val);
-    clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(() => setSearchQ(val.trim()), 350);
+  const showToast = useCallback((msg) => {
+    setToast(msg); setTimeout(() => setToast(''), 2200);
+  }, []);
+
+  const loadTopics = useCallback(async (category) => {
+    setTopicsLoading(true);
+    try {
+      const list = await apiGetTopics({ cat: category });
+      setTopics(list);
+    } catch (err) { console.error(err); }
+    finally { setTopicsLoading(false); }
+  }, []);
+
+  useEffect(() => { loadTopics(cat); }, [cat, loadTopics]);
+
+  async function openTopic(topic) {
+    setActiveTopic(topic);
+    setThreadLoading(true);
+    setPosts([]);
+    try {
+      const data = await apiGetTopic(topic.id);
+      setPosts(data.posts || []);
+    } catch (err) { console.error(err); }
+    finally { setThreadLoading(false); }
+  }
+
+  async function handleCreateTopic(e) {
+    e.preventDefault();
+    if (newTitle.length < 5 || newBody.length < 10) {
+      showToast('Title needs 5+ chars, body needs 10+ chars'); return;
+    }
+    setSubmitting(true);
+    try {
+      await apiCreateTopic(newTitle, newBody, newCat);
+      setNewTitle(''); setNewBody(''); setShowNewForm(false);
+      showToast('Topic posted!');
+      loadTopics(cat);
+    } catch (err) { showToast(err.message); }
+    finally { setSubmitting(false); }
+  }
+
+  async function handleReply(e) {
+    e.preventDefault();
+    if (!replyText.trim()) return;
+    setReplySubmitting(true);
+    try {
+      const data = await apiPostReply(activeTopic.id, replyText);
+      setPosts(p => [...p, data.post]);
+      setReplyText('');
+      // Refresh topic reply count
+      setTopics(ts => ts.map(t => t.id === activeTopic.id ? { ...t, reply_count: (t.reply_count || 0) + 1 } : t));
+    } catch (err) { showToast(err.message); }
+    finally { setReplySubmitting(false); }
+  }
+
+  async function handleLike(postId) {
+    try {
+      const res = await apiLikeReply(postId);
+      setPosts(ps => ps.map(p => p.id === postId ? { ...p, likes: res.likes, liked_by_me: res.liked, disliked_by_me: false } : p));
+    } catch (err) { showToast(err.message); }
+  }
+
+  async function handleDislike(postId) {
+    try {
+      const res = await apiDislikeReply(postId);
+      setPosts(ps => ps.map(p => p.id === postId ? { ...p, likes: res.likes, liked_by_me: false, disliked_by_me: res.disliked } : p));
+    } catch (err) { showToast(err.message); }
   }
 
   return (
-    <div className="page">
-      <Header subtitle="Forum" />
-      <div style={{ paddingTop: '1.5rem', maxWidth: 860, margin: '0 auto' }}>
+    <div className="app-container">
+      <Header searchPlaceholder="Search forum topics..." />
+      <SideNav />
 
-        {selectedTopicId ? (
-          <ThreadView
-            topicId={selectedTopicId}
-            onBack={() => setSelectedTopicId(null)}
-          />
-        ) : (
+      {/* Panel Matches: Topic List */}
+      <aside className="panel-matches">
+        <div className="panel-header">
+          <h3>Fan Forum</h3>
+          <div className="live-tag"><span>TOPICS</span></div>
+        </div>
+        {/* Category tabs */}
+        <div className="cat-tabs" style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', overflowX: 'auto', scrollbarWidth: 'none' }}>
+          {CAT_TABS.map(t => (
+            <button
+              key={t.key}
+              className={`cat-tab${cat === t.key ? ' active' : ''}`}
+              style={{ padding: '10px 13px', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: cat === t.key ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', border: 'none', background: 'none', borderBottom: cat === t.key ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -1, whiteSpace: 'nowrap', fontFamily: 'var(--f-display)' }}
+              onClick={() => { setCat(t.key); setActiveTopic(null); }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <div id="topicList" className="panel-games-scroll">
+          {topicsLoading ? (
+            <div className="loading" style={{ padding: 24 }}><div className="loading__spinner" /></div>
+          ) : topics.length === 0 ? (
+            <div className="empty">No topics yet.</div>
+          ) : (
+            topics.map(t => (
+              <div
+                key={t.id}
+                className={`topic-card${activeTopic?.id === t.id ? ' active' : ''}`}
+                onClick={() => openTopic(t)}
+              >
+                <div className="topic-card__top">
+                  <CatBadge cat={t.category} />
+                </div>
+                <div className="topic-card__title">{t.title}</div>
+                <div className="topic-card__preview">{t.body}</div>
+                <div className="topic-card__meta">
+                  <span>@{t.author_name || 'Anonymous'}</span>
+                  <span className="dot">·</span>
+                  <span>{timeAgo(t.created_at)}</span>
+                  <span className="reply-badge">{t.reply_count || 0} replies</span>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
+
+      {/* Main Stage */}
+      <main className="main-stage">
+        {/* New topic form toggle */}
+        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+          <button
+            className="btn btn--primary"
+            style={{ fontSize: 12, padding: '6px 14px', fontFamily: 'var(--f-display)', letterSpacing: '0.05em' }}
+            onClick={() => setShowNewForm(v => !v)}
+          >
+            {showNewForm ? 'Cancel' : '+ New Topic'}
+          </button>
+        </div>
+
+        {showNewForm && (
+          <div className="form-panel" style={{ marginBottom: '1.25rem' }}>
+            <h2>Start a Discussion</h2>
+            <form onSubmit={handleCreateTopic}>
+              <div className="form-group">
+                <label className="form-label">Category</label>
+                <select className="form-input" value={newCat} onChange={e => setNewCat(e.target.value)} style={{ cursor: 'pointer', maxWidth: '100%' }}>
+                  <option value="game">Games</option>
+                  <option value="player">Players</option>
+                  <option value="trade">Trade</option>
+                  <option value="chat">Chat</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Title <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(min. 5 chars)</span></label>
+                <input type="text" className="form-input" placeholder="What's on your mind?" maxLength={80} value={newTitle} onChange={e => setNewTitle(e.target.value)} />
+                <div className="char-counter" style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', marginTop: 3 }}>{newTitle.length} / 80</div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Body <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(min. 10 chars)</span></label>
+                <textarea className="form-textarea" placeholder="Share your thoughts…" value={newBody} onChange={e => setNewBody(e.target.value)} />
+                <div className="char-counter" style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', marginTop: 3 }}>{newBody.length} chars</div>
+              </div>
+              <div style={{ display: 'flex', gap: '.5rem' }}>
+                <button type="submit" className="btn btn--primary" disabled={submitting}>{submitting ? 'Posting…' : 'Post Topic'}</button>
+                <button type="button" className="btn btn--ghost" onClick={() => setShowNewForm(false)}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {activeTopic ? (
           <>
-            {/* Page heading */}
-            <div style={{ marginBottom: '1.5rem' }}>
-              <div style={{ fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--accent)', marginBottom: '0.35rem' }}>Fan Discussion</div>
-              <h1 style={{ fontFamily: "'Bebas Neue',sans-serif", fontSize: 'clamp(2rem,5vw,3.2rem)', letterSpacing: '0.06em', lineHeight: 1, margin: 0 }}>
-                Fan <span style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-2))', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>Forum</span>
-              </h1>
+            {/* Thread hero */}
+            <div className="thread-hero" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1.6rem', marginBottom: '1.25rem', position: 'relative', overflow: 'hidden' }}>
+              <div className="thread-hero__title">{activeTopic.title}</div>
+              <div className="thread-hero__meta">
+                <CatBadge cat={activeTopic.category} />
+                <span>·</span>
+                <span>@{activeTopic.author_name || 'Anonymous'}</span>
+                <span>·</span>
+                <span>{timeAgo(activeTopic.created_at)}</span>
+                <span>·</span>
+                <span>{activeTopic.reply_count || 0} replies</span>
+              </div>
+              <div className="thread-hero__body" style={{ whiteSpace: 'pre-wrap' }}>{activeTopic.body}</div>
             </div>
 
-            {/* Controls row: search + sort */}
-            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-              {/* Search */}
-              <div style={{ flex: 1, minWidth: 180, position: 'relative' }}>
-                <svg style={{ position: 'absolute', left: '0.7rem', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                <input
-                  type="text"
-                  value={searchInput}
-                  onChange={e => handleSearchInput(e.target.value)}
-                  placeholder="Search topics…"
-                  style={{ width: '100%', background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', color: 'var(--text)', fontFamily: 'inherit', fontSize: '0.87rem', padding: '0.5rem 0.75rem 0.5rem 2.1rem', outline: 'none', boxSizing: 'border-box', transition: 'border-color .15s' }}
-                  onFocus={e => e.target.style.borderColor = 'var(--accent)'}
-                  onBlur={e => e.target.style.borderColor = 'var(--border)'}
-                />
-                {searchInput && (
-                  <button onClick={() => { setSearchInput(''); setSearchQ(''); }} style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.85rem', padding: '0.1rem 0.3rem' }}>✕</button>
-                )}
-              </div>
-
-              {/* Sort */}
-              <div style={{ display: 'flex', gap: '0.3rem', flexShrink: 0 }}>
-                {SORTS.map(s => (
-                  <button
-                    key={s.key}
-                    onClick={() => setActiveSort(s.key)}
-                    style={{
-                      padding: '0.4rem 0.75rem', borderRadius: 'var(--radius-pill)',
-                      border: `1px solid ${activeSort === s.key ? 'var(--accent)' : 'var(--border)'}`,
-                      background: activeSort === s.key ? 'var(--accent-glow)' : 'var(--bg-surface)',
-                      color: activeSort === s.key ? 'var(--accent)' : 'var(--text-muted)',
-                      cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, fontFamily: 'inherit',
-                      transition: 'all .15s', whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {s.label}
-                  </button>
-                ))}
-              </div>
+            {/* Replies */}
+            <div style={{ marginBottom: 16 }}>
+              {threadLoading ? (
+                <div className="loading"><div className="loading__spinner" /></div>
+              ) : posts.length === 0 ? (
+                <div className="empty">No replies yet. Be first!</div>
+              ) : (
+                posts.map(p => (
+                  <PostItem
+                    key={p.id}
+                    post={p}
+                    currentUser={user}
+                    onLike={handleLike}
+                    onDislike={handleDislike}
+                  />
+                ))
+              )}
             </div>
 
-            {/* Category tabs */}
-            <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid var(--border)', marginBottom: '0', overflowX: 'auto', paddingBottom: '0' }}>
-              {CATEGORIES.map(c => (
-                <button
-                  key={c.key}
-                  onClick={() => setActiveCat(c.key)}
-                  style={{
-                    padding: '0.55rem 0.9rem', background: 'none', border: 'none',
-                    borderBottom: activeCat === c.key ? '2px solid var(--accent)' : '2px solid transparent',
-                    fontFamily: 'inherit', fontSize: '0.82rem', fontWeight: 700,
-                    color: activeCat === c.key ? 'var(--accent)' : 'var(--text-muted)',
-                    cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1,
-                    transition: 'color .15s, border-color .15s',
-                  }}
-                >
-                  {c.label}
+            {/* Reply form */}
+            <div className="form-panel form-panel--blue" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1.4rem', position: 'relative', overflow: 'hidden' }}>
+              <h3>Add Reply</h3>
+              <form onSubmit={handleReply}>
+                <div className="form-group">
+                  <textarea
+                    className="form-textarea"
+                    placeholder="Share your thoughts…"
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <button type="submit" className="btn btn--primary" disabled={replySubmitting || !replyText.trim()}>
+                  {replySubmitting ? 'Posting…' : 'Post Reply'}
                 </button>
-              ))}
+              </form>
             </div>
-
-            <TopicList
-              cat={activeCat}
-              sort={activeSort}
-              q={searchQ}
-              onSelect={setSelectedTopicId}
-            />
+          </>
+        ) : (
+          /* Welcome + TOTD */
+          <>
+            {/* Topic of the Day */}
+            <div className="totd-card" style={{ position: 'relative', background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1.8rem 1.6rem 1.4rem', marginBottom: '1.25rem', overflow: 'hidden' }}>
+              <div className="totd-eyebrow">TOPIC OF THE DAY</div>
+              <div className="totd-date">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
+              <div className="totd-question">{todayTopic.q}</div>
+              <div className="totd-sub">{todayTopic.sub}</div>
+              <div className="totd-stats">
+                <div className="totd-stat"><strong>{topics.filter(t => t.category === 'totd').length || 0}</strong> TOTD posts today</div>
+                <div className="totd-stat"><strong>{topics.length}</strong> total topics</div>
+              </div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>💬</div>
+              <div style={{ fontFamily: 'var(--f-display)', fontSize: 24, marginBottom: 8 }}>Fan Forum</div>
+              <div style={{ fontSize: 14 }}>Select a topic from the left to read and reply</div>
+            </div>
           </>
         )}
-      </div>
-      <footer className="site-footer">SCORE · NBA · Fan Forum</footer>
+
+        <footer style={{ marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '.72rem', fontFamily: 'var(--f-display)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Game Pulse · Data for reference only
+        </footer>
+      </main>
+
+      {/* Panel Social */}
+      <aside className="panel-social">
+        <div className="rp-section">
+          <div className="rp-head">Topic of the Day</div>
+          <div
+            className="totd-rp"
+            style={{ background: 'linear-gradient(135deg, rgba(255,180,0,.06), rgba(230,0,0,.04))', border: '1px solid rgba(255,180,0,.2)', padding: 12, cursor: 'pointer' }}
+            onClick={() => setActiveTopic(null)}
+          >
+            <div className="totd-rp__label">Today's Discussion</div>
+            <div className="totd-rp__q">{todayTopic.q}</div>
+            <div className="totd-rp__cta">Join Discussion →</div>
+          </div>
+        </div>
+        <div className="rp-section">
+          <div className="rp-head">Quick Links</div>
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: 12, color: 'var(--text-sub)', textDecoration: 'none', borderBottom: '1px solid var(--border)' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/></svg>
+            Today's Games
+          </Link>
+        </div>
+        <div className="rp-section">
+          <div className="rp-head">Forum Rules</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <div>· Be respectful to all fans</div>
+            <div>· No spam or self-promotion</div>
+            <div>· Keep it basketball related</div>
+            <div>· Have fun and enjoy!</div>
+          </div>
+        </div>
+      </aside>
+
+      {toast && <div className="coin-toast">{toast}</div>}
     </div>
   );
 }

@@ -6,6 +6,7 @@ import GamePage    from './pages/GamePage.jsx';
 import ForumPage   from './pages/ForumPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import ShopPage    from './pages/ShopPage.jsx';
+import NewsPage    from './pages/NewsPage.jsx';
 
 function ProtectedRoute({ children }) {
   const { isLoggedIn } = useAuth();
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/forum"   element={<ProtectedRoute><ForumPage /></ProtectedRoute>} />
         <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
         <Route path="/shop"    element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
+        <Route path="/news"    element={<ProtectedRoute><NewsPage /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
