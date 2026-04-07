@@ -26,16 +26,6 @@ const PROVIDERS = {
     clientSec: process.env.GOOGLE_CLIENT_SECRET,
     scope:     'openid email profile',
   },
-  github: {
-    label:     'GitHub',
-    authUrl:   'https://github.com/login/oauth/authorize',
-    tokenUrl:  'https://github.com/login/oauth/access_token',
-    userUrl:   'https://api.github.com/user',
-    emailsUrl: 'https://api.github.com/user/emails',
-    clientId:  process.env.GITHUB_CLIENT_ID,
-    clientSec: process.env.GITHUB_CLIENT_SECRET,
-    scope:     'read:user user:email',
-  },
   discord: {
     label:     'Discord',
     authUrl:   'https://discord.com/api/oauth2/authorize',
@@ -88,23 +78,6 @@ function isConfigured(provider) {
   return Boolean(provider?.clientId && provider?.clientSec);
 }
 
-async function fetchGithubEmail(accessToken, provider) {
-  const emailRes = await fetch(provider.emailsUrl, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: 'application/json',
-      'User-Agent': 'GamePulse/1.0',
-      'X-GitHub-Api-Version': '2022-11-28',
-    },
-  });
-  if (!emailRes.ok) return null;
-
-  const emails = await emailRes.json();
-  const primary = emails.find((item) => item.primary && item.verified);
-  const verified = emails.find((item) => item.verified);
-  return primary?.email || verified?.email || null;
-}
-
 // Normalize profile from each provider into { providerId, username, email }
 async function normalizeProfile(providerName, profile, accessToken, p) {
   if (providerName === 'google') {
@@ -112,15 +85,6 @@ async function normalizeProfile(providerName, profile, accessToken, p) {
       providerId: String(profile.id),
       username:   (profile.name || '').replace(/\s+/g, '').slice(0, 28) || `user${String(profile.id).slice(0, 8)}`,
       email:      profile.email,
-    };
-  }
-  if (providerName === 'github') {
-    const fallbackName = profile.login || `gh${profile.id}`;
-    const email = profile.email || await fetchGithubEmail(accessToken, p) || `gh_${profile.id}@noreply.github.com`;
-    return {
-      providerId: String(profile.id),
-      username:   fallbackName.slice(0, 28),
-      email,
     };
   }
   if (providerName === 'discord') {
@@ -240,7 +204,6 @@ router.get('/:provider/callback', async (req, res) => {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': 'SCORE-NBA-App/1.0',
         Accept: 'application/json',
-        ...(providerName === 'github' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
       },
     });
     const profile = await profileRes.json();

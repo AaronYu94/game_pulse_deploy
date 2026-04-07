@@ -4,12 +4,59 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { apiGetAuthProviders, apiLogin, apiRegister } from '../lib/api.js';
 
 const DEFAULT_PROVIDERS = [
-  { key: 'google', label: 'Google', enabled: false, url: null, blurb: 'Fast sign-in with your Google account.', mark: 'G', accent: '#fbbc05' },
-  { key: 'github', label: 'GitHub', enabled: false, url: null, blurb: 'Use your GitHub identity for one-click access.', mark: 'GH', accent: '#ffffff' },
-  { key: 'twitter', label: 'X', enabled: false, url: null, blurb: 'Jump in with X for quick social access.', mark: 'X', accent: '#ffffff' },
-  { key: 'discord', label: 'Discord', enabled: false, url: null, blurb: 'Perfect if your community already lives on Discord.', mark: 'D', accent: '#5865F2' },
-  { key: 'facebook', label: 'Facebook', enabled: false, url: null, blurb: 'Keep it familiar with Facebook sign-in.', mark: 'f', accent: '#1877F2' },
+  { key: 'google', label: 'Google', enabled: false, url: null, blurb: 'Fast sign-in with your Google account.' },
+  { key: 'twitter', label: 'X', enabled: false, url: null, blurb: 'Jump in with X for quick social access.' },
+  { key: 'discord', label: 'Discord', enabled: false, url: null, blurb: 'Perfect if your community already lives on Discord.' },
+  { key: 'facebook', label: 'Facebook', enabled: false, url: null, blurb: 'Keep it familiar with Facebook sign-in.' },
 ];
+
+function ProviderIcon({ providerKey }) {
+  if (providerKey === 'google') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.8 4.8 0 0 1-2.1 3.2v2.5h3.3c1.9-1.8 3-4.3 3-7.5Z" />
+        <path fill="#34A853" d="M12 22a9.8 9.8 0 0 0 6.6-2.4l-3.3-2.5c-.9.6-2 .9-3.3.9A6 6 0 0 1 6.3 14H3v2.6A10 10 0 0 0 12 22Z" />
+        <path fill="#FBBC04" d="M6 12c0-.7.1-1.3.3-2L3 7.4A10 10 0 0 0 2 12c0 1.6.4 3.2 1 4.6l3.3-2.5A6 6 0 0 1 6 12Z" />
+        <path fill="#EA4335" d="M12 6a5.5 5.5 0 0 1 3.9 1.5l2.9-2.9A10 10 0 0 0 3 7.4L6.3 10A6 6 0 0 1 12 6Z" />
+      </svg>
+    );
+  }
+
+  if (providerKey === 'twitter') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M5 4h4.2l3 4.2L16 4h3l-5.3 6.6L19.5 20h-4.2l-3.3-4.6L7.8 20h-3l5.6-7-5.4-9Z"
+          fill="currentColor"
+        />
+      </svg>
+    );
+  }
+
+  if (providerKey === 'discord') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M18.5 6.7a13 13 0 0 0-3.2-1l-.2.4a9 9 0 0 1 2.7 1.2A10.7 10.7 0 0 0 12 5.8a10.8 10.8 0 0 0-5.8 1.5A9 9 0 0 1 9 6l-.2-.4c-1.1.2-2.2.6-3.2 1A13 13 0 0 0 3.3 17a13 13 0 0 0 4 2l1-1.5c-.6-.2-1.1-.4-1.6-.7l.4-.3a9.2 9.2 0 0 0 9.8 0l.4.3c-.5.3-1 .5-1.6.7l1 1.5a13.1 13.1 0 0 0 4-2 13 13 0 0 0-2.2-10.3ZM9.5 14.3c-.8 0-1.4-.8-1.4-1.7 0-1 .6-1.7 1.4-1.7.8 0 1.5.8 1.4 1.7 0 1-.6 1.7-1.4 1.7Zm5 0c-.8 0-1.4-.8-1.4-1.7 0-1 .6-1.7 1.4-1.7.8 0 1.5.8 1.4 1.7 0 1-.6 1.7-1.4 1.7Z"
+        />
+      </svg>
+    );
+  }
+
+  if (providerKey === 'facebook') {
+    return (
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          fill="currentColor"
+          d="M13.6 20v-7h2.4l.4-2.8h-2.8V8.4c0-.8.2-1.3 1.4-1.3h1.5V4.5c-.3 0-1.1-.1-2.2-.1-2.2 0-3.7 1.3-3.7 3.8v2h-2.5V13h2.5v7h3Z"
+        />
+      </svg>
+    );
+  }
+
+  return null;
+}
 
 function formatAuthError(raw) {
   if (!raw) return '';
@@ -313,11 +360,24 @@ export default function LoginPage() {
           align-items: center;
           justify-content: center;
           border: 1px solid var(--border-mid);
-          background: rgba(255,255,255,0.03);
-          font-family: var(--f-display);
-          font-size: 1.15rem;
-          letter-spacing: 0.04em;
+          background: rgba(255,255,255,0.04);
+          border-radius: 10px;
           flex-shrink: 0;
+        }
+        .oauth-card__mark svg {
+          width: 22px;
+          height: 22px;
+          display: block;
+        }
+        .oauth-card__mark--twitter,
+        .oauth-card__mark--facebook {
+          color: #ffffff;
+        }
+        .oauth-card__mark--discord {
+          color: #5865F2;
+        }
+        .oauth-card__mark--facebook {
+          color: #1877F2;
         }
         .oauth-card__body {
           display: flex;
@@ -457,7 +517,7 @@ export default function LoginPage() {
               <span>PULSE</span>
             </div>
             <div className="auth-subtitle">
-              Sign in with Google, GitHub, X, Discord, or Facebook, then jump straight into live scores, predictions, and game-night conversation without the throwaway-feeling login wall.
+              Sign in with Google, X, Discord, or Facebook, then jump straight into live scores, predictions, and game-night conversation without the throwaway-feeling login wall.
             </div>
 
             <div className="auth-feature-grid">
@@ -500,8 +560,8 @@ export default function LoginPage() {
                     disabled={!provider.enabled}
                     onClick={() => handleSocialLogin(provider)}
                   >
-                    <span className="oauth-card__mark" style={{ color: provider.accent }}>
-                      {provider.mark}
+                    <span className={`oauth-card__mark oauth-card__mark--${provider.key}`}>
+                      <ProviderIcon providerKey={provider.key} />
                     </span>
                     <span className="oauth-card__body">
                       <span className="oauth-card__title">Continue with {provider.label}</span>
