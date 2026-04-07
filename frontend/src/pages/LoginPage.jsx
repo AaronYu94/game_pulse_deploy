@@ -302,25 +302,26 @@ export default function LoginPage() {
           font-size: 0.84rem;
           color: var(--text-sub);
         }
-        .auth-provider-panel {
+        .auth-card-social {
+          padding: 1rem;
           border: 1px solid var(--border);
-          background: rgba(0,0,0,0.34);
-          padding: 1.2rem;
+          background: rgba(255,255,255,0.025);
+          margin-bottom: 1.25rem;
         }
-        .auth-provider-head {
+        .auth-card-social__head {
           display: flex;
           align-items: baseline;
           justify-content: space-between;
           gap: 1rem;
-          margin-bottom: 1rem;
+          margin-bottom: 0.9rem;
         }
-        .auth-provider-title {
+        .auth-card-social__title {
           font-family: var(--f-display);
-          font-size: 1.55rem;
+          font-size: 1.2rem;
           letter-spacing: 0.04em;
         }
-        .auth-provider-meta {
-          font-size: 0.78rem;
+        .auth-card-social__meta {
+          font-size: 0.72rem;
           color: var(--text-muted);
           text-transform: uppercase;
           letter-spacing: 0.08em;
@@ -404,6 +405,23 @@ export default function LoginPage() {
         .oauth-card__status.ready {
           color: var(--success);
         }
+        .auth-divider {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin: 1.15rem 0 1.4rem;
+          color: var(--text-muted);
+          font-size: 0.72rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .auth-divider::before,
+        .auth-divider::after {
+          content: '';
+          flex: 1;
+          height: 1px;
+          background: var(--border);
+        }
         .auth-card {
           width: 100%;
           padding: 2.4rem 2rem;
@@ -428,11 +446,11 @@ export default function LoginPage() {
           margin-bottom: 0.25rem;
         }
         .auth-card-logo span { color: var(--text-muted); font-size: 1rem; font-weight: 500; }
-        .auth-card-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.8rem; }
+        .auth-card-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.2rem; }
         .auth-tabs {
           display: flex;
           border-bottom: 1px solid var(--border);
-          margin-bottom: 1.75rem;
+          margin-bottom: 1.2rem;
         }
         .auth-tab {
           flex: 1;
@@ -517,7 +535,7 @@ export default function LoginPage() {
               <span>PULSE</span>
             </div>
             <div className="auth-subtitle">
-              Sign in with Google, X, Discord, or Facebook, then jump straight into live scores, predictions, and game-night conversation without the throwaway-feeling login wall.
+              Jump into live scores, predictions, and game-night conversation with one account that follows you across the whole app.
             </div>
 
             <div className="auth-feature-grid">
@@ -543,11 +561,17 @@ export default function LoginPage() {
               </div>
             </div>
 
-            <div className="auth-provider-panel">
-              <div className="auth-provider-head">
-                <div className="auth-provider-title">Social Sign-In</div>
-                <div className="auth-provider-meta">
-                  {providersLoading ? 'Checking providers...' : `${providers.filter((provider) => provider.enabled).length} live now`}
+          </section>
+
+          <div className="auth-card">
+            <div className="auth-card-logo">GAME <span>PULSE</span></div>
+            <div className="auth-card-subtitle">Use social sign-in for speed, or keep it classic with email and password.</div>
+
+            <div className="auth-card-social">
+              <div className="auth-card-social__head">
+                <div className="auth-card-social__title">Social Sign-In</div>
+                <div className="auth-card-social__meta">
+                  {providersLoading ? 'Checking...' : `${providers.filter((provider) => provider.enabled).length} live now`}
                 </div>
               </div>
 
@@ -574,11 +598,8 @@ export default function LoginPage() {
                 ))}
               </div>
             </div>
-          </section>
 
-          <div className="auth-card">
-            <div className="auth-card-logo">GAME <span>PULSE</span></div>
-            <div className="auth-card-subtitle">Use social sign-in for speed, or keep it classic with email and password.</div>
+            <div className="auth-divider">Or use email</div>
 
             <div className="auth-tabs">
               <button className={`auth-tab${tab === 'login' ? ' active' : ''}`} onClick={() => setTab('login')}>Login</button>
