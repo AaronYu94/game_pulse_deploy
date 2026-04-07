@@ -3,7 +3,7 @@ const db     = require('../db');
 const auth   = require('../middleware/auth');
 
 // GET /api/forum/topics?cat=&sort=&q=
-router.get('/topics', auth, async (req, res) => {
+router.get('/topics', auth.optional, async (req, res) => {
   const { cat, sort, q } = req.query;
 
   const conditions = [];
@@ -77,8 +77,9 @@ router.post('/topics', auth, async (req, res) => {
 });
 
 // GET /api/forum/topics/:id — topic + replies
-router.get('/topics/:id', auth, async (req, res) => {
+router.get('/topics/:id', auth.optional, async (req, res) => {
   const { id } = req.params;
+  const viewerId = req.user?.id || null;
   try {
     // increment view count (fire-and-forget)
     db.query('UPDATE forum_topics SET views = views + 1 WHERE id = $1', [id]).catch(() => {});
@@ -88,16 +89,16 @@ router.get('/topics/:id', auth, async (req, res) => {
       db.query(
         `SELECT p.*,
                 COUNT(DISTINCT pl.user_id)::int   AS likes,
-                BOOL_OR(pl.user_id = $2)          AS liked_by_me,
+                COALESCE(BOOL_OR(pl.user_id = $2), FALSE) AS liked_by_me,
                 COUNT(DISTINCT pd.user_id)::int   AS dislikes,
-                BOOL_OR(pd.user_id = $2)          AS disliked_by_me
+                COALESCE(BOOL_OR(pd.user_id = $2), FALSE) AS disliked_by_me
          FROM forum_posts p
          LEFT JOIN forum_post_likes    pl ON pl.post_id = p.id
          LEFT JOIN forum_post_dislikes pd ON pd.post_id = p.id
          WHERE p.topic_id = $1
          GROUP BY p.id
          ORDER BY p.created_at ASC`,
-        [id, req.user.id]
+        [id, viewerId]
       ),
     ]);
     if (!topicRes.rows[0]) return res.status(404).json({ error: 'Topic not found' });

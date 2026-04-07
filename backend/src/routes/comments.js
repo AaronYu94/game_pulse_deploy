@@ -3,19 +3,20 @@ const db     = require('../db');
 const auth   = require('../middleware/auth');
 
 // GET /api/comments/:gameId
-router.get('/:gameId', auth, async (req, res) => {
+router.get('/:gameId', auth.optional, async (req, res) => {
   const { gameId } = req.params;
+  const viewerId = req.user?.id || null;
   try {
     const { rows } = await db.query(
       `SELECT c.*,
               COUNT(cl.user_id)::int                              AS likes,
-              BOOL_OR(cl.user_id = $2)                           AS liked_by_me
+              COALESCE(BOOL_OR(cl.user_id = $2), FALSE)          AS liked_by_me
        FROM comments c
        LEFT JOIN comment_likes cl ON cl.comment_id = c.id
        WHERE c.game_id = $1
        GROUP BY c.id
        ORDER BY c.created_at DESC`,
-      [gameId, req.user.id]
+      [gameId, viewerId]
     );
     res.json({ comments: rows });
   } catch (err) {

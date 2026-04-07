@@ -6,19 +6,27 @@ function getToken() { return localStorage.getItem('score_token'); }
 
 async function apiFetch(path, options = {}) {
   const token = getToken();
+  const hasBody = options.body !== undefined;
   const res = await fetch(API_BASE + path, {
     ...options,
     headers: {
-      'Content-Type': 'application/json',
+      ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(options.headers || {}),
     },
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    body: hasBody ? JSON.stringify(options.body) : undefined,
   });
 
-  const data = await res.json();
+  const contentType = res.headers.get('content-type') || '';
+  const data = contentType.includes('application/json')
+    ? await res.json()
+    : await res.text();
+
   if (!res.ok) {
-    const err = new Error(data.error || `Request failed (${res.status})`);
+    const message = typeof data === 'string'
+      ? (data || `Request failed (${res.status})`)
+      : (data.error || data.message || `Request failed (${res.status})`);
+    const err = new Error(message);
     err.status = res.status;
     throw err;
   }
@@ -31,6 +39,9 @@ export async function apiRegister(username, email, password) {
 }
 export async function apiLogin(email, password) {
   return apiFetch('/api/auth/login', { method: 'POST', body: { email, password } });
+}
+export async function apiGetAuthProviders() {
+  return apiFetch('/api/auth/providers');
 }
 
 // Coins & Tasks

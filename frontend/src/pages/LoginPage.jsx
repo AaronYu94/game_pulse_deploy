@@ -1,13 +1,34 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { apiLogin, apiRegister } from '../lib/api.js';
+import { apiGetAuthProviders, apiLogin, apiRegister } from '../lib/api.js';
+
+const DEFAULT_PROVIDERS = [
+  { key: 'google', label: 'Google', enabled: false, url: null, blurb: 'Fast sign-in with your Google account.', mark: 'G', accent: '#fbbc05' },
+  { key: 'github', label: 'GitHub', enabled: false, url: null, blurb: 'Use your GitHub identity for one-click access.', mark: 'GH', accent: '#ffffff' },
+  { key: 'twitter', label: 'X', enabled: false, url: null, blurb: 'Jump in with X for quick social access.', mark: 'X', accent: '#ffffff' },
+  { key: 'discord', label: 'Discord', enabled: false, url: null, blurb: 'Perfect if your community already lives on Discord.', mark: 'D', accent: '#5865F2' },
+  { key: 'facebook', label: 'Facebook', enabled: false, url: null, blurb: 'Keep it familiar with Facebook sign-in.', mark: 'f', accent: '#1877F2' },
+];
+
+function formatAuthError(raw) {
+  if (!raw) return '';
+  const value = raw.toLowerCase();
+  if (value === 'access_denied') return 'The sign-in flow was canceled before it finished.';
+  if (value === 'unknown_provider') return 'That sign-in method is not available yet.';
+  if (value.includes('no access token')) return 'The provider did not return a usable login token. Please try again.';
+  if (value.includes('missing state')) return 'This login session expired. Please start the sign-in flow again.';
+  return raw.replace(/\+/g, ' ');
+}
 
 export default function LoginPage() {
   const { isLoggedIn, login } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('login');
+  const [providers, setProviders] = useState(DEFAULT_PROVIDERS);
+  const [providersLoading, setProvidersLoading] = useState(true);
+  const [authNotice, setAuthNotice] = useState('');
 
   // login form
   const [loginEmail, setLoginEmail] = useState('');
@@ -21,24 +42,67 @@ export default function LoginPage() {
   const [regPassword, setRegPassword] = useState('');
   const [regError, setRegError] = useState('');
   const [regLoading, setRegLoading] = useState(false);
+  const redirectPath = searchParams.get('redirect') || '/';
 
   useEffect(() => {
     if (isLoggedIn) {
-      const redirect = searchParams.get('redirect') || '/';
-      navigate(redirect, { replace: true });
+      navigate(redirectPath, { replace: true });
     }
-  }, [isLoggedIn, navigate, searchParams]);
+  }, [isLoggedIn, navigate, redirectPath]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    apiGetAuthProviders()
+      .then((data) => {
+        if (ignore) return;
+        const remoteProviders = new Map((data.providers || []).map((provider) => [provider.key, provider]));
+        setProviders(DEFAULT_PROVIDERS.map((provider) => ({
+          ...provider,
+          ...(remoteProviders.get(provider.key) || {}),
+        })));
+      })
+      .catch(() => {
+        if (!ignore) setProviders(DEFAULT_PROVIDERS);
+      })
+      .finally(() => {
+        if (!ignore) setProvidersLoading(false);
+      });
+
+    return () => { ignore = true; };
+  }, []);
+
+  useEffect(() => {
+    const token = searchParams.get('token');
+    const userParam = searchParams.get('user');
+    const error = searchParams.get('error');
+
+    if (token && userParam) {
+      try {
+        login(token, JSON.parse(userParam));
+        navigate(redirectPath, { replace: true });
+        return;
+      } catch {
+        setAuthNotice('Social sign-in finished, but we could not restore your account session.');
+      }
+    }
+
+    if (error) {
+      setTab('login');
+      setAuthNotice(formatAuthError(error));
+    }
+  }, [login, navigate, redirectPath, searchParams]);
 
   async function handleLogin(e) {
     e.preventDefault();
+    setAuthNotice('');
     setLoginError('');
     if (!loginEmail || !loginPassword) { setLoginError('Please fill in all fields.'); return; }
     setLoginLoading(true);
     try {
       const data = await apiLogin(loginEmail, loginPassword);
       login(data.token, data.user);
-      const redirect = searchParams.get('redirect') || '/';
-      navigate(redirect, { replace: true });
+      navigate(redirectPath, { replace: true });
     } catch (err) {
       setLoginError(err.message);
     } finally {
@@ -48,19 +112,27 @@ export default function LoginPage() {
 
   async function handleRegister(e) {
     e.preventDefault();
+    setAuthNotice('');
     setRegError('');
     if (!regUsername || !regEmail || !regPassword) { setRegError('Please fill in all fields.'); return; }
     setRegLoading(true);
     try {
       const data = await apiRegister(regUsername, regEmail, regPassword);
       login(data.token, data.user);
-      const redirect = searchParams.get('redirect') || '/';
-      navigate(redirect, { replace: true });
+      navigate(redirectPath, { replace: true });
     } catch (err) {
       setRegError(err.message);
     } finally {
       setRegLoading(false);
     }
+  }
+
+  function handleSocialLogin(provider) {
+    if (!provider.enabled || !provider.url) {
+      setAuthNotice(`${provider.label} sign-in is not configured yet.`);
+      return;
+    }
+    window.location.assign(provider.url);
   }
 
   return (
@@ -73,15 +145,213 @@ export default function LoginPage() {
           justify-content: center;
           padding: 2rem 1rem;
           overflow: auto;
+          background:
+            radial-gradient(circle at 18% 18%, rgba(230, 0, 0, 0.18), transparent 30%),
+            radial-gradient(circle at 82% 24%, rgba(255, 32, 32, 0.14), transparent 28%),
+            linear-gradient(135deg, rgba(255,255,255,0.02), transparent 38%),
+            var(--bg-deep);
+        }
+        .auth-stage {
+          width: min(1180px, 100%);
+          display: grid;
+          grid-template-columns: minmax(320px, 1.15fr) minmax(360px, 440px);
+          border: 1px solid var(--border);
+          background:
+            linear-gradient(90deg, rgba(255,255,255,0.01), rgba(255,255,255,0)),
+            rgba(7, 7, 7, 0.92);
+          box-shadow: var(--shadow-card);
+          overflow: hidden;
+        }
+        .auth-hero {
+          position: relative;
+          padding: 3rem;
+          min-height: 720px;
+          border-right: 1px solid var(--border);
+          background:
+            linear-gradient(160deg, rgba(230,0,0,0.12), rgba(0,0,0,0) 40%),
+            linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+            var(--bg-surface);
+        }
+        .auth-hero::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background:
+            repeating-linear-gradient(125deg, rgba(255,255,255,0.03) 0 2px, transparent 2px 18px);
+          opacity: 0.35;
+          pointer-events: none;
+        }
+        .auth-hero > * {
+          position: relative;
+          z-index: 1;
+        }
+        .auth-badge-row {
+          display: flex;
+          gap: 0.75rem;
+          flex-wrap: wrap;
+          margin-bottom: 1.5rem;
+        }
+        .auth-badge {
+          display: inline-flex;
+          align-items: center;
+          gap: 0.45rem;
+          padding: 0.45rem 0.7rem;
+          border: 1px solid var(--border);
+          background: rgba(255,255,255,0.03);
+          font-size: 0.78rem;
+          color: var(--text-sub);
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+        }
+        .auth-badge-dot {
+          width: 8px;
+          height: 8px;
+          background: var(--accent);
+          box-shadow: 0 0 14px rgba(230,0,0,0.7);
+        }
+        .auth-logo {
+          font-family: var(--f-display);
+          font-size: clamp(3.2rem, 8vw, 5.4rem);
+          line-height: 0.88;
+          letter-spacing: 0.08em;
+          color: var(--text);
+          margin-bottom: 1.1rem;
+        }
+        .auth-logo span {
+          display: block;
+          color: var(--accent);
+          font-style: italic;
+        }
+        .auth-subtitle {
+          max-width: 38rem;
+          font-size: 1rem;
+          color: var(--text-sub);
+          margin-bottom: 2rem;
+        }
+        .auth-feature-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.9rem;
+          margin-bottom: 2rem;
+        }
+        .auth-feature {
+          padding: 1rem;
+          border: 1px solid var(--border);
+          background: rgba(255,255,255,0.02);
+        }
+        .auth-feature__eyebrow {
+          font-size: 0.74rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          color: var(--accent);
+          margin-bottom: 0.35rem;
+        }
+        .auth-feature__title {
+          font-weight: 700;
+          font-size: 0.98rem;
+          margin-bottom: 0.35rem;
+        }
+        .auth-feature__copy {
+          font-size: 0.84rem;
+          color: var(--text-sub);
+        }
+        .auth-provider-panel {
+          border: 1px solid var(--border);
+          background: rgba(0,0,0,0.34);
+          padding: 1.2rem;
+        }
+        .auth-provider-head {
+          display: flex;
+          align-items: baseline;
+          justify-content: space-between;
+          gap: 1rem;
+          margin-bottom: 1rem;
+        }
+        .auth-provider-title {
+          font-family: var(--f-display);
+          font-size: 1.55rem;
+          letter-spacing: 0.04em;
+        }
+        .auth-provider-meta {
+          font-size: 0.78rem;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
+        .auth-provider-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 0.85rem;
+        }
+        .oauth-card {
+          display: flex;
+          align-items: flex-start;
+          gap: 0.85rem;
+          width: 100%;
+          min-height: 104px;
+          padding: 0.95rem;
+          border: 1px solid var(--border);
+          background: rgba(255,255,255,0.025);
+          color: var(--text);
+          text-align: left;
+          cursor: pointer;
+          transition: transform .16s ease, border-color .16s ease, background .16s ease;
+        }
+        .oauth-card:hover:not(:disabled) {
+          transform: translateY(-2px);
+          border-color: rgba(230,0,0,0.55);
+          background: rgba(255,255,255,0.05);
+        }
+        .oauth-card:disabled {
+          cursor: not-allowed;
+          opacity: 0.55;
+        }
+        .oauth-card__mark {
+          width: 42px;
+          height: 42px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 1px solid var(--border-mid);
+          background: rgba(255,255,255,0.03);
+          font-family: var(--f-display);
+          font-size: 1.15rem;
+          letter-spacing: 0.04em;
+          flex-shrink: 0;
+        }
+        .oauth-card__body {
+          display: flex;
+          flex-direction: column;
+          gap: 0.25rem;
+          min-width: 0;
+        }
+        .oauth-card__title {
+          font-weight: 700;
+          font-size: 0.92rem;
+        }
+        .oauth-card__copy {
+          font-size: 0.78rem;
+          color: var(--text-sub);
+          line-height: 1.35;
+        }
+        .oauth-card__status {
+          margin-top: auto;
+          font-size: 0.72rem;
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+          color: var(--text-muted);
+        }
+        .oauth-card__status.ready {
+          color: var(--success);
         }
         .auth-card {
           width: 100%;
-          max-width: 420px;
-          padding: 2.5rem 2rem;
+          padding: 2.4rem 2rem;
           position: relative;
           overflow: hidden;
-          background: var(--bg-card);
-          border: 1px solid var(--border);
+          background:
+            linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0)),
+            var(--bg-card);
         }
         .auth-card::before {
           content: '';
@@ -90,15 +360,15 @@ export default function LoginPage() {
           height: 3px;
           background: linear-gradient(90deg, var(--accent), var(--accent-2));
         }
-        .auth-logo {
+        .auth-card-logo {
           font-family: var(--f-display);
-          font-size: 2.2rem;
+          font-size: 2.3rem;
           letter-spacing: 0.12em;
           color: var(--accent);
           margin-bottom: 0.25rem;
         }
-        .auth-logo span { color: var(--text-muted); font-size: 1rem; font-weight: 500; }
-        .auth-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 2rem; }
+        .auth-card-logo span { color: var(--text-muted); font-size: 1rem; font-weight: 500; }
+        .auth-card-subtitle { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1.8rem; }
         .auth-tabs {
           display: flex;
           border-bottom: 1px solid var(--border);
@@ -133,58 +403,176 @@ export default function LoginPage() {
           color: var(--text-muted);
           text-align: center;
         }
+        .auth-legal {
+          margin-top: 0.9rem;
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          text-align: center;
+          line-height: 1.45;
+        }
+        .auth-loading {
+          font-size: 0.75rem;
+          color: var(--text-muted);
+          text-transform: uppercase;
+          letter-spacing: 0.08em;
+        }
         #root { height: auto; overflow: auto; }
+        @media (max-width: 1080px) {
+          .auth-stage {
+            grid-template-columns: 1fr;
+          }
+          .auth-hero {
+            min-height: auto;
+            border-right: none;
+            border-bottom: 1px solid var(--border);
+          }
+        }
+        @media (max-width: 720px) {
+          .auth-wrap {
+            padding: 1rem;
+          }
+          .auth-hero {
+            padding: 1.6rem;
+          }
+          .auth-card {
+            padding: 1.6rem 1.2rem;
+          }
+          .auth-feature-grid,
+          .auth-provider-grid {
+            grid-template-columns: 1fr;
+          }
+        }
       `}</style>
       <div className="auth-wrap">
-        <div className="auth-card">
-          <div className="auth-logo">GAME <span>PULSE</span></div>
-          <div className="auth-subtitle">Sign in to rate games, place predictions, and earn Score Coins.</div>
+        <div className="auth-stage">
+          <section className="auth-hero">
+            <div className="auth-badge-row">
+              <div className="auth-badge"><span className="auth-badge-dot" /> Live NBA Pulse</div>
+              <div className="auth-badge">Unified Access</div>
+              <div className="auth-badge">Secure OAuth</div>
+            </div>
 
-          <div className="auth-tabs">
-            <button className={`auth-tab${tab === 'login' ? ' active' : ''}`} onClick={() => setTab('login')}>Login</button>
-            <button className={`auth-tab${tab === 'register' ? ' active' : ''}`} onClick={() => setTab('register')}>Register</button>
-          </div>
+            <div className="auth-logo">
+              GAME
+              <span>PULSE</span>
+            </div>
+            <div className="auth-subtitle">
+              Sign in with Google, GitHub, X, Discord, or Facebook, then jump straight into live scores, predictions, and game-night conversation without the throwaway-feeling login wall.
+            </div>
 
-          {tab === 'login' && (
-            <form onSubmit={handleLogin}>
-              {loginError && <div className="auth-error">{loginError}</div>}
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input type="email" className="form-input" placeholder="you@example.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} autoComplete="email" />
+            <div className="auth-feature-grid">
+              <div className="auth-feature">
+                <div className="auth-feature__eyebrow">Game Night Ready</div>
+                <div className="auth-feature__title">One account across predictions, ratings, chat, and forum.</div>
+                <div className="auth-feature__copy">No duplicate sign-up flow when you just want to react to a game and get in.</div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Password</label>
-                <input type="password" className="form-input" placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} autoComplete="current-password" />
+              <div className="auth-feature">
+                <div className="auth-feature__eyebrow">Built For Fans</div>
+                <div className="auth-feature__title">Start with 200 Score Coins and unlock titles, stickers, and bragging rights.</div>
+                <div className="auth-feature__copy">Your profile, rewards, and community activity stay tied to one identity.</div>
               </div>
-              <button type="submit" className="btn btn--primary" style={{ width: '100%', marginTop: '.25rem' }} disabled={loginLoading}>
-                {loginLoading ? 'Logging in…' : 'Login'}
-              </button>
-            </form>
-          )}
+              <div className="auth-feature">
+                <div className="auth-feature__eyebrow">Friction Down</div>
+                <div className="auth-feature__title">Social login for quick entry, email login for long-term account control.</div>
+                <div className="auth-feature__copy">Use whichever route feels right without losing the sports-first feel of the app.</div>
+              </div>
+              <div className="auth-feature">
+                <div className="auth-feature__eyebrow">Secure Redirects</div>
+                <div className="auth-feature__title">Provider callbacks land you right back inside the app already signed in.</div>
+                <div className="auth-feature__copy">No copy-paste tokens, no dead-end callback pages, no awkward handoff.</div>
+              </div>
+            </div>
 
-          {tab === 'register' && (
-            <form onSubmit={handleRegister}>
-              {regError && <div className="auth-error">{regError}</div>}
-              <div className="form-group">
-                <label className="form-label">Username</label>
-                <input type="text" className="form-input" placeholder="e.g. BallIsLife" maxLength={30} value={regUsername} onChange={e => setRegUsername(e.target.value)} autoComplete="username" />
+            <div className="auth-provider-panel">
+              <div className="auth-provider-head">
+                <div className="auth-provider-title">Social Sign-In</div>
+                <div className="auth-provider-meta">
+                  {providersLoading ? 'Checking providers...' : `${providers.filter((provider) => provider.enabled).length} live now`}
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Email</label>
-                <input type="email" className="form-input" placeholder="you@example.com" value={regEmail} onChange={e => setRegEmail(e.target.value)} autoComplete="email" />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Password <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(min. 6 chars)</span></label>
-                <input type="password" className="form-input" placeholder="••••••••" value={regPassword} onChange={e => setRegPassword(e.target.value)} autoComplete="new-password" />
-              </div>
-              <button type="submit" className="btn btn--primary" style={{ width: '100%', marginTop: '.25rem' }} disabled={regLoading}>
-                {regLoading ? 'Creating account…' : 'Create Account'}
-              </button>
-            </form>
-          )}
 
-          <div className="auth-footer">
-            You start with <strong style={{ color: 'var(--accent-2)' }}>200 Score Coins</strong> — predict games &amp; earn more.
+              <div className="auth-provider-grid">
+                {providers.map((provider) => (
+                  <button
+                    key={provider.key}
+                    type="button"
+                    className="oauth-card"
+                    disabled={!provider.enabled}
+                    onClick={() => handleSocialLogin(provider)}
+                  >
+                    <span className="oauth-card__mark" style={{ color: provider.accent }}>
+                      {provider.mark}
+                    </span>
+                    <span className="oauth-card__body">
+                      <span className="oauth-card__title">Continue with {provider.label}</span>
+                      <span className="oauth-card__copy">{provider.blurb}</span>
+                      <span className={`oauth-card__status${provider.enabled ? ' ready' : ''}`}>
+                        {provider.enabled ? 'Ready now' : 'Not configured yet'}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <div className="auth-card">
+            <div className="auth-card-logo">GAME <span>PULSE</span></div>
+            <div className="auth-card-subtitle">Use social sign-in for speed, or keep it classic with email and password.</div>
+
+            <div className="auth-tabs">
+              <button className={`auth-tab${tab === 'login' ? ' active' : ''}`} onClick={() => setTab('login')}>Login</button>
+              <button className={`auth-tab${tab === 'register' ? ' active' : ''}`} onClick={() => setTab('register')}>Register</button>
+            </div>
+
+            {(authNotice || loginError || regError) && (
+              <div className="auth-error">
+                {tab === 'login' ? (loginError || authNotice) : (regError || authNotice)}
+              </div>
+            )}
+
+            {tab === 'login' && (
+              <form onSubmit={handleLogin}>
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input type="email" className="form-input" placeholder="you@example.com" value={loginEmail} onChange={e => setLoginEmail(e.target.value)} autoComplete="email" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Password</label>
+                  <input type="password" className="form-input" placeholder="••••••••" value={loginPassword} onChange={e => setLoginPassword(e.target.value)} autoComplete="current-password" />
+                </div>
+                <button type="submit" className="btn btn--primary" style={{ width: '100%', marginTop: '.25rem' }} disabled={loginLoading}>
+                  {loginLoading ? 'Logging in…' : 'Login'}
+                </button>
+              </form>
+            )}
+
+            {tab === 'register' && (
+              <form onSubmit={handleRegister}>
+                <div className="form-group">
+                  <label className="form-label">Username</label>
+                  <input type="text" className="form-input" placeholder="e.g. BallIsLife" maxLength={30} value={regUsername} onChange={e => setRegUsername(e.target.value)} autoComplete="username" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Email</label>
+                  <input type="email" className="form-input" placeholder="you@example.com" value={regEmail} onChange={e => setRegEmail(e.target.value)} autoComplete="email" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Password <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(min. 6 chars)</span></label>
+                  <input type="password" className="form-input" placeholder="••••••••" value={regPassword} onChange={e => setRegPassword(e.target.value)} autoComplete="new-password" />
+                </div>
+                <button type="submit" className="btn btn--primary" style={{ width: '100%', marginTop: '.25rem' }} disabled={regLoading}>
+                  {regLoading ? 'Creating account…' : 'Create Account'}
+                </button>
+              </form>
+            )}
+
+            <div className="auth-footer">
+              You start with <strong style={{ color: 'var(--accent-2)' }}>200 Score Coins</strong> and keep one identity across the whole fan experience.
+            </div>
+            <div className="auth-legal">
+              By continuing with a social provider, you will be redirected to that platform and returned here automatically after authorization.
+            </div>
           </div>
         </div>
       </div>

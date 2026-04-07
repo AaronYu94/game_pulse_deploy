@@ -5,6 +5,7 @@ import { fetchGames, monthCalendarDays, toESPNDate, getTeamColors } from '../lib
 import {
   apiSettleBets, apiGetAllBets, apiGetCoins, apiClaimTask, DAILY_TASK_DEFS,
 } from '../lib/api.js';
+import { useAuth } from '../contexts/AuthContext.jsx';
 
 const ALL_DAYS  = monthCalendarDays();
 const TODAY_KEY = toESPNDate(new Date());
@@ -253,8 +254,33 @@ function TasksPanel({ coins, tasks }) {
   );
 }
 
+function GuestPanel() {
+  return (
+    <div
+      className="form-panel"
+      style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        padding: '1.4rem',
+      }}
+    >
+      <div className="section-title" style={{ marginTop: 0, marginBottom: 12 }}>
+        <div className="slash-accent"></div>
+        GUEST MODE
+      </div>
+      <div style={{ color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: 14 }}>
+        Browse games, standings, news, and forum threads right away. Sign in whenever you want to start earning Score Coins, post comments, and make predictions.
+      </div>
+      <Link to="/login?redirect=%2F" className="btn btn--primary" style={{ display: 'inline-flex', textDecoration: 'none' }}>
+        Sign In To Join
+      </Link>
+    </div>
+  );
+}
+
 export default function HomePage() {
   const navigate = useNavigate();
+  const { isLoggedIn } = useAuth();
   const [selectedDate, setSelectedDate] = useState(ALL_DAYS[TODAY_IDX]);
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -281,34 +307,45 @@ export default function HomePage() {
       if (!g) {
         g = await fetchGames(dateKey);
         gameCache.current[dateKey] = g;
-        if (dateKey <= TODAY_KEY && g.length) apiSettleBets(g).catch(() => {});
+        if (isLoggedIn && dateKey <= TODAY_KEY && g.length) apiSettleBets(g).catch(() => {});
       }
       setGames(g);
     } catch (err) { setError(err.message); }
     finally { setLoading(false); }
-  }, []);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     loadGames(TODAY_KEY);
-    // Load coins + bets
-    apiGetCoins().then(d => { setCoins(d.coins ?? 0); setTaskState(d.tasks || {}); }).catch(() => {});
-    apiGetAllBets().then(setAllBets).catch(() => {});
     // Prefetch adjacent days
     const yIdx = TODAY_IDX - 1;
     if (yIdx >= 0) {
       const yKey = toESPNDate(ALL_DAYS[yIdx]);
-      fetchGames(yKey).then(g => { gameCache.current[yKey] = g; if (g.length) apiSettleBets(g).catch(() => {}); }).catch(() => {});
+      fetchGames(yKey).then(g => {
+        gameCache.current[yKey] = g;
+        if (isLoggedIn && g.length) apiSettleBets(g).catch(() => {});
+      }).catch(() => {});
     }
     const tIdx = TODAY_IDX + 1;
     if (tIdx < ALL_DAYS.length) {
       const tKey = toESPNDate(ALL_DAYS[tIdx]);
       fetchGames(tKey).then(g => { gameCache.current[tKey] = g; }).catch(() => {});
     }
-    // Claim login task
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isLoggedIn) {
+      setCoins(null);
+      setAllBets([]);
+      setTaskState({});
+      return;
+    }
+
+    apiGetCoins().then(d => { setCoins(d.coins ?? 0); setTaskState(d.tasks || {}); }).catch(() => {});
+    apiGetAllBets().then(setAllBets).catch(() => {});
     apiClaimTask('login').then(res => {
       if (res?.ok) { setCoins(res.coins); setTaskState(s => ({ ...s, login_done: true })); showToast('+20 coins · Daily login!'); }
     }).catch(() => {});
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isLoggedIn, showToast]);
 
   useEffect(() => {
     if (calRef.current) {
@@ -325,6 +362,7 @@ export default function HomePage() {
     const url = `${location.origin}/game?id=${game.id}&date=${selectedDateKey}`;
     if (navigator.share) navigator.share({ title: `SCORE · ${game.away.abbr} vs ${game.home.abbr}`, url }).catch(() => {});
     else navigator.clipboard.writeText(url).then(() => showToast('Link copied!')).catch(() => {});
+    if (!isLoggedIn) return;
     try {
       const res = await apiClaimTask('share');
       if (res?.ok) { setTaskState(s => ({ ...s, share_done: true })); setCoins(res.coins); showToast('+50 coins · Shared a game!'); }
@@ -424,16 +462,22 @@ export default function HomePage() {
           <div className="slash-accent"></div>
           SCORE COIN
         </div>
-        <div className="coin-widget">
-          <div className="coin-widget__dots"></div>
-          <div className="coin-widget__amount">
-            <span className="coin-widget__symbol">SC</span>
-            <span className="coin-widget__num" id="coinBalance">{coins !== null ? coins.toLocaleString() : '—'}</span>
-          </div>
-          <div className="coin-widget__sub">Predict &amp; win coins</div>
-        </div>
+        {isLoggedIn ? (
+          <>
+            <div className="coin-widget">
+              <div className="coin-widget__dots"></div>
+              <div className="coin-widget__amount">
+                <span className="coin-widget__symbol">SC</span>
+                <span className="coin-widget__num" id="coinBalance">{coins !== null ? coins.toLocaleString() : '—'}</span>
+              </div>
+              <div className="coin-widget__sub">Predict &amp; win coins</div>
+            </div>
 
-        <TasksPanel coins={coins} tasks={taskState} />
+            <TasksPanel coins={coins} tasks={taskState} />
+          </>
+        ) : (
+          <GuestPanel />
+        )}
       </aside>
 
       {toast && <div className="coin-toast">{toast}</div>}

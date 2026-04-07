@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import Header, { SideNav } from '../components/Header.jsx';
 import {
   apiGetTopics, apiCreateTopic, apiGetTopic, apiPostReply,
@@ -112,7 +112,9 @@ function PostItem({ post, currentUser, onLike, onDislike }) {
 }
 
 export default function ForumPage() {
-  const { user } = useAuth();
+  const location = useLocation();
+  const { user, isLoggedIn } = useAuth();
+  const loginHref = `/login?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
   const [cat, setCat] = useState('all');
   const [topics, setTopics] = useState([]);
   const [topicsLoading, setTopicsLoading] = useState(true);
@@ -157,6 +159,10 @@ export default function ForumPage() {
 
   async function handleCreateTopic(e) {
     e.preventDefault();
+    if (!isLoggedIn) {
+      showToast('Sign in to start a discussion.');
+      return;
+    }
     if (newTitle.length < 5 || newBody.length < 10) {
       showToast('Title needs 5+ chars, body needs 10+ chars'); return;
     }
@@ -172,6 +178,10 @@ export default function ForumPage() {
 
   async function handleReply(e) {
     e.preventDefault();
+    if (!isLoggedIn) {
+      showToast('Sign in to reply to this topic.');
+      return;
+    }
     if (!replyText.trim()) return;
     setReplySubmitting(true);
     try {
@@ -185,6 +195,10 @@ export default function ForumPage() {
   }
 
   async function handleLike(postId) {
+    if (!isLoggedIn) {
+      showToast('Sign in to vote on replies.');
+      return;
+    }
     try {
       const res = await apiLikeReply(postId);
       setPosts(ps => ps.map(p => p.id === postId ? { ...p, likes: res.likes, liked_by_me: res.liked, disliked_by_me: false } : p));
@@ -192,6 +206,10 @@ export default function ForumPage() {
   }
 
   async function handleDislike(postId) {
+    if (!isLoggedIn) {
+      showToast('Sign in to vote on replies.');
+      return;
+    }
     try {
       const res = await apiDislikeReply(postId);
       setPosts(ps => ps.map(p => p.id === postId ? { ...p, likes: res.likes, liked_by_me: false, disliked_by_me: res.disliked } : p));
@@ -255,16 +273,26 @@ export default function ForumPage() {
       <main className="main-stage">
         {/* New topic form toggle */}
         <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
-          <button
-            className="btn btn--primary"
-            style={{ fontSize: 12, padding: '6px 14px', fontFamily: 'var(--f-display)', letterSpacing: '0.05em' }}
-            onClick={() => setShowNewForm(v => !v)}
-          >
-            {showNewForm ? 'Cancel' : '+ New Topic'}
-          </button>
+          {isLoggedIn ? (
+            <button
+              className="btn btn--primary"
+              style={{ fontSize: 12, padding: '6px 14px', fontFamily: 'var(--f-display)', letterSpacing: '0.05em' }}
+              onClick={() => setShowNewForm(v => !v)}
+            >
+              {showNewForm ? 'Cancel' : '+ New Topic'}
+            </button>
+          ) : (
+            <Link
+              to={loginHref}
+              className="btn btn--primary"
+              style={{ fontSize: 12, padding: '6px 14px', fontFamily: 'var(--f-display)', letterSpacing: '0.05em', textDecoration: 'none' }}
+            >
+              Sign In To Post
+            </Link>
+          )}
         </div>
 
-        {showNewForm && (
+        {showNewForm && isLoggedIn && (
           <div className="form-panel" style={{ marginBottom: '1.25rem' }}>
             <h2>Start a Discussion</h2>
             <form onSubmit={handleCreateTopic}>
@@ -333,21 +361,35 @@ export default function ForumPage() {
 
             {/* Reply form */}
             <div className="form-panel form-panel--blue" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1.4rem', position: 'relative', overflow: 'hidden' }}>
-              <h3>Add Reply</h3>
-              <form onSubmit={handleReply}>
-                <div className="form-group">
-                  <textarea
-                    className="form-textarea"
-                    placeholder="Share your thoughts…"
-                    value={replyText}
-                    onChange={e => setReplyText(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <button type="submit" className="btn btn--primary" disabled={replySubmitting || !replyText.trim()}>
-                  {replySubmitting ? 'Posting…' : 'Post Reply'}
-                </button>
-              </form>
+              {isLoggedIn ? (
+                <>
+                  <h3>Add Reply</h3>
+                  <form onSubmit={handleReply}>
+                    <div className="form-group">
+                      <textarea
+                        className="form-textarea"
+                        placeholder="Share your thoughts…"
+                        value={replyText}
+                        onChange={e => setReplyText(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <button type="submit" className="btn btn--primary" disabled={replySubmitting || !replyText.trim()}>
+                      {replySubmitting ? 'Posting…' : 'Post Reply'}
+                    </button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <h3>Join The Conversation</h3>
+                  <div style={{ color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: 12 }}>
+                    Sign in to reply, upvote strong takes, and start your own discussion threads.
+                  </div>
+                  <Link to={loginHref} className="btn btn--primary" style={{ display: 'inline-flex', textDecoration: 'none' }}>
+                    Sign In To Reply
+                  </Link>
+                </>
+              )}
             </div>
           </>
         ) : (
@@ -397,6 +439,12 @@ export default function ForumPage() {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/></svg>
             Today's Games
           </Link>
+          {!isLoggedIn && (
+            <Link to={loginHref} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: 12, color: 'var(--text-sub)', textDecoration: 'none', borderBottom: '1px solid var(--border)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg>
+              Sign In To Participate
+            </Link>
+          )}
         </div>
         <div className="rp-section">
           <div className="rp-head">Forum Rules</div>

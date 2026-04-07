@@ -3,8 +3,9 @@ const db     = require('../db');
 const auth   = require('../middleware/auth');
 
 // GET /api/ratings/:gameId — aggregate + caller's own rating
-router.get('/:gameId', auth, async (req, res) => {
+router.get('/:gameId', auth.optional, async (req, res) => {
   const { gameId } = req.params;
+  const viewerId = req.user?.id || null;
   try {
     const [aggRes, myRes] = await Promise.all([
       db.query(
@@ -15,7 +16,7 @@ router.get('/:gameId', auth, async (req, res) => {
       ),
       db.query(
         'SELECT score FROM game_ratings WHERE user_id = $1 AND game_id = $2',
-        [req.user.id, gameId]
+        [viewerId, gameId]
       ),
     ]);
     res.json({
@@ -62,8 +63,9 @@ router.post('/:gameId', auth, async (req, res) => {
 });
 
 // GET /api/refratings/:gameId
-router.get('/ref/:gameId', auth, async (req, res) => {
+router.get('/ref/:gameId', auth.optional, async (req, res) => {
   const { gameId } = req.params;
+  const viewerId = req.user?.id || null;
   try {
     const [aggRes, myRes] = await Promise.all([
       db.query(
@@ -76,7 +78,7 @@ router.get('/ref/:gameId', auth, async (req, res) => {
       ),
       db.query(
         'SELECT verdict FROM ref_ratings WHERE user_id = $1 AND game_id = $2',
-        [req.user.id, gameId]
+        [viewerId, gameId]
       ),
     ]);
     const r = aggRes.rows[0];
@@ -128,8 +130,9 @@ router.post('/ref/:gameId', auth, async (req, res) => {
 });
 
 // GET /api/ratings/player/:gameId/:playerId
-router.get('/player/:gameId/:playerId', auth, async (req, res) => {
+router.get('/player/:gameId/:playerId', auth.optional, async (req, res) => {
   const { gameId, playerId } = req.params;
+  const viewerId = req.user?.id || null;
   try {
     const [aggRes, myRes] = await Promise.all([
       db.query(
@@ -139,7 +142,7 @@ router.get('/player/:gameId/:playerId', auth, async (req, res) => {
       ),
       db.query(
         'SELECT score FROM player_ratings WHERE user_id = $1 AND game_id = $2 AND player_id = $3',
-        [req.user.id, gameId, playerId]
+        [viewerId, gameId, playerId]
       ),
     ]);
     res.json({
@@ -154,8 +157,9 @@ router.get('/player/:gameId/:playerId', auth, async (req, res) => {
 });
 
 // GET /api/ratings/player/:gameId — all player ratings for a game (bulk)
-router.get('/player/:gameId', auth, async (req, res) => {
+router.get('/player/:gameId', auth.optional, async (req, res) => {
   const { gameId } = req.params;
+  const viewerId = req.user?.id || null;
   try {
     const { rows } = await db.query(
       `SELECT player_id,
@@ -164,7 +168,7 @@ router.get('/player/:gameId', auth, async (req, res) => {
               MAX(score) FILTER (WHERE user_id = $2) AS my_score
        FROM player_ratings WHERE game_id = $1
        GROUP BY player_id`,
-      [gameId, req.user.id]
+      [gameId, viewerId]
     );
     // Map to { playerId: { avg, count, myScore } }
     const result = {};

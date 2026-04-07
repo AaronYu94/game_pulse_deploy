@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import Header, { SideNav } from '../components/Header.jsx';
 import {
   apiGetCoins, apiGetBet, apiPlaceBet,
@@ -28,7 +28,7 @@ function timeAgo(dateStr) {
 
 const BET_CHIPS = [10, 25, 50, 100, 250];
 
-function BetSection({ gameInfo, coins, existingBet, onBetPlaced }) {
+function BetSection({ gameInfo, coins, existingBet, onBetPlaced, canBet, loginHref }) {
   const [pick, setPick] = useState('');
   const [amount, setAmount] = useState(25);
   const [loading, setLoading] = useState(false);
@@ -36,6 +36,26 @@ function BetSection({ gameInfo, coins, existingBet, onBetPlaced }) {
   const [msgType, setMsgType] = useState('');
 
   if (!gameInfo) return null;
+
+  if (!canBet) {
+    return (
+      <div className="bet-section">
+        <div className="bet-section__header">
+          <div className="bet-section__title">Predictions</div>
+          <div className="bet-section__balance"><span>Guest</span></div>
+        </div>
+        <div className="bet-placed-card">
+          <div>
+            <div className="bet-placed-card__pick">Sign in to make your pick</div>
+            <div className="bet-placed-card__amount">Save predictions, track results, and earn Score Coins.</div>
+          </div>
+        </div>
+        <Link to={loginHref} className="btn btn--primary" style={{ display: 'inline-flex', marginTop: 12, textDecoration: 'none' }}>
+          Sign In To Predict
+        </Link>
+      </div>
+    );
+  }
 
   async function handleBet() {
     if (!pick || !amount) { setMsg('Select a team and amount.'); setMsgType('err'); return; }
@@ -108,12 +128,16 @@ function BetSection({ gameInfo, coins, existingBet, onBetPlaced }) {
   );
 }
 
-function BoxscoreTable({ team, playerRatings, onRatePlayer }) {
+function BoxscoreTable({ team, playerRatings, onRatePlayer, canRate, onRequireAuth }) {
   const [openPlayerId, setOpenPlayerId] = useState(null);
   const [rateVal, setRateVal] = useState(null);
 
   function handleRowClick(p) {
     if (p.dnp) return;
+    if (!canRate) {
+      onRequireAuth && onRequireAuth();
+      return;
+    }
     setOpenPlayerId(openPlayerId === p.id ? null : p.id);
     setRateVal(null);
   }
@@ -151,7 +175,7 @@ function BoxscoreTable({ team, playerRatings, onRatePlayer }) {
                   key={p.id}
                   className={`${p.starter ? 'starter' : ''}${p.dnp ? ' dnp-row' : ''}`}
                   onClick={() => handleRowClick(p)}
-                  style={{ cursor: p.dnp ? 'default' : 'pointer' }}
+                  style={{ cursor: p.dnp ? 'default' : canRate ? 'pointer' : 'not-allowed' }}
                 >
                   <td>
                     <div className="player-cell">
@@ -179,7 +203,7 @@ function BoxscoreTable({ team, playerRatings, onRatePlayer }) {
                         <span className="player-rating-badge__votes">{rating.count} votes</span>
                       </div>
                     ) : (
-                      <span className="player-rating-badge__empty">Rate</span>
+                      <span className="player-rating-badge__empty">{canRate ? 'Rate' : 'Sign in'}</span>
                     )}
                   </td>
                 </tr>,
@@ -192,17 +216,17 @@ function BoxscoreTable({ team, playerRatings, onRatePlayer }) {
                           <button
                             key={v}
                             className={`rpick-btn${rateVal === v ? ' active' : ''}`}
-                            onClick={() => setRateVal(v)}
+                            onClick={(e) => { e.stopPropagation(); setRateVal(v); }}
                           >{v}</button>
                         ))}
                         {rateVal && (
                           <button
                             className="btn btn--primary"
                             style={{ fontSize: 12, padding: '4px 12px', marginLeft: 8 }}
-                            onClick={() => submitRating(null, p.id)}
+                            onClick={(e) => { e.stopPropagation(); submitRating(null, p.id); }}
                           >Submit</button>
                         )}
-                        <span className="rpick-cancel" onClick={() => setOpenPlayerId(null)}>✕</span>
+                        <span className="rpick-cancel" onClick={(e) => { e.stopPropagation(); setOpenPlayerId(null); }}>✕</span>
                       </div>
                     </td>
                   </tr>
@@ -219,9 +243,11 @@ function BoxscoreTable({ team, playerRatings, onRatePlayer }) {
 export default function GamePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const location = useLocation();
+  const { isLoggedIn } = useAuth();
   const gameId = searchParams.get('id');
   const dateKey = searchParams.get('date') || toESPNDate(new Date());
+  const loginHref = `/login?redirect=${encodeURIComponent(`${location.pathname}${location.search}`)}`;
 
   const [gameInfo, setGameInfo] = useState(null);
   const [teams, setTeams] = useState([]);
@@ -246,6 +272,11 @@ export default function GamePage() {
 
   useEffect(() => {
     if (!gameId) { navigate('/'); return; }
+    setPlayerRatings({});
+    setComments([]);
+    setBet(null);
+    if (!isLoggedIn) setCoins(null);
+
     async function load() {
       setLoading(true); setError('');
       try {
@@ -261,14 +292,20 @@ export default function GamePage() {
       finally { setLoading(false); }
     }
     load();
-    // Load coins, bet, ratings, comments
-    apiGetCoins().then(d => setCoins(d.coins ?? 0)).catch(() => {});
-    apiGetBet(gameId).then(setBet).catch(() => {});
+
+    if (isLoggedIn) {
+      apiGetCoins().then(d => setCoins(d.coins ?? 0)).catch(() => {});
+      apiGetBet(gameId).then(setBet).catch(() => {});
+    }
     apiGetAllPlayerRatings(gameId).then(setPlayerRatings).catch(() => {});
     apiGetComments(gameId).then(setComments).catch(() => {});
-  }, [gameId, dateKey, navigate]);
+  }, [gameId, dateKey, isLoggedIn, navigate]);
 
   async function handleRatePlayer(playerId, score) {
+    if (!isLoggedIn) {
+      showToast('Sign in to rate players.');
+      return;
+    }
     try {
       const res = await apiRatePlayer(gameId, playerId, score);
       setPlayerRatings(prev => ({ ...prev, [String(playerId)]: { avg: res.avg, count: res.count, myRating: score } }));
@@ -280,6 +317,10 @@ export default function GamePage() {
 
   async function handleComment(e) {
     e.preventDefault();
+    if (!isLoggedIn) {
+      showToast('Sign in to join the discussion.');
+      return;
+    }
     if (!commentText.trim()) return;
     setCommentLoading(true);
     try {
@@ -293,10 +334,16 @@ export default function GamePage() {
   }
 
   async function handleLikeComment(id) {
+    if (!isLoggedIn) {
+      showToast('Sign in to like comments.');
+      return;
+    }
     try {
       const res = await apiLikeComment(id);
-      setComments(prev => prev.map(c => c.id === id ? { ...c, likes: res.likes, liked_by_me: res.liked_by_me } : c));
-    } catch (_) {}
+      setComments(prev => prev.map(c => c.id === id ? { ...c, likes: res.likes, liked_by_me: res.liked } : c));
+    } catch (err) {
+      showToast(err.message);
+    }
   }
 
   const home = gameInfo?.home;
@@ -423,6 +470,8 @@ export default function GamePage() {
                 team={team}
                 playerRatings={playerRatings}
                 onRatePlayer={handleRatePlayer}
+                canRate={isLoggedIn}
+                onRequireAuth={() => showToast('Sign in to rate players.')}
               />
             ))}
 
@@ -461,19 +510,30 @@ export default function GamePage() {
 
               {/* Comment form */}
               <div style={{ marginTop: 16 }}>
-                <form onSubmit={handleComment} style={{ display: 'flex', gap: 8 }}>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="Add a comment…"
-                    value={commentText}
-                    onChange={e => setCommentText(e.target.value)}
-                    style={{ flex: 1 }}
-                  />
-                  <button type="submit" className="btn-send" disabled={commentLoading || !commentText.trim()}>
-                    {commentLoading ? '…' : 'Send'}
-                  </button>
-                </form>
+                {isLoggedIn ? (
+                  <form onSubmit={handleComment} style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      type="text"
+                      className="form-input"
+                      placeholder="Add a comment…"
+                      value={commentText}
+                      onChange={e => setCommentText(e.target.value)}
+                      style={{ flex: 1 }}
+                    />
+                    <button type="submit" className="btn-send" disabled={commentLoading || !commentText.trim()}>
+                      {commentLoading ? '…' : 'Send'}
+                    </button>
+                  </form>
+                ) : (
+                  <div className="form-panel" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1rem 1.1rem' }}>
+                    <div style={{ color: 'var(--text-sub)', marginBottom: 10 }}>
+                      Sign in to add your take, like comments, and rate the players in this game.
+                    </div>
+                    <Link to={loginHref} className="btn btn--primary" style={{ display: 'inline-flex', textDecoration: 'none' }}>
+                      Sign In To Comment
+                    </Link>
+                  </div>
+                )}
               </div>
             </div>
           </>
@@ -486,11 +546,16 @@ export default function GamePage() {
           <div className="rp-head">Score Coin</div>
           <div className="rp-coin">
             <div className="rp-coin__amount">
-              <span className="rp-coin__symbol">SC</span>
-              <span className="rp-coin__num">{coins ?? '—'}</span>
+              <span className="rp-coin__symbol">{isLoggedIn ? 'SC' : 'Guest'}</span>
+              <span className="rp-coin__num">{isLoggedIn ? (coins ?? '—') : 'Mode'}</span>
             </div>
-            <div className="rp-coin__sub">Your balance</div>
+            <div className="rp-coin__sub">{isLoggedIn ? 'Your balance' : 'Sign in to unlock predictions'}</div>
           </div>
+          {!isLoggedIn && (
+            <Link to={loginHref} className="btn btn--primary" style={{ display: 'inline-flex', marginTop: 12, textDecoration: 'none' }}>
+              Sign In
+            </Link>
+          )}
         </div>
 
         <div className="rp-section" style={{ padding: 16 }}>
@@ -498,6 +563,8 @@ export default function GamePage() {
             gameInfo={gameInfo}
             coins={coins}
             existingBet={bet}
+            canBet={isLoggedIn}
+            loginHref={loginHref}
             onBetPlaced={() => {
               apiGetBet(gameId).then(setBet).catch(() => {});
               apiGetCoins().then(d => setCoins(d.coins ?? 0)).catch(() => {});

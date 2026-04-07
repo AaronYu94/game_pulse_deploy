@@ -3,14 +3,15 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 
 export default function Header({ searchPlaceholder = 'Search players, teams...' }) {
   const { user, logout } = useAuth();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const loginHref = `/login?redirect=${encodeURIComponent(`${pathname}${search}`)}`;
 
   return (
     <header className="top-bar">
-      <div className="brand">
+      <Link to="/" className="brand" style={{ textDecoration: 'none' }}>
         <div className="logo-mark">S</div>
         <span className="brand-name">GAME <span className="accent-text">PULSE</span></span>
-      </div>
+      </Link>
 
       <div className="search-bar">
         <input type="text" placeholder={searchPlaceholder} readOnly />
@@ -44,7 +45,7 @@ export default function Header({ searchPlaceholder = 'Search players, teams...' 
             </button>
           </div>
         ) : (
-          <Link to="/login" className="header-notif-text" style={{ textDecoration: 'none' }}>Login</Link>
+          <Link to={loginHref} className="header-notif-text" style={{ textDecoration: 'none' }}>Login</Link>
         )}
         <div className="header-avatar"></div>
       </div>

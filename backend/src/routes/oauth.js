@@ -18,6 +18,7 @@ function pkceChallenge(verifier) {
 // ── Provider definitions ───────────────────────────────────────────────────
 const PROVIDERS = {
   google: {
+    label:     'Google',
     authUrl:   'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl:  'https://oauth2.googleapis.com/token',
     userUrl:   'https://www.googleapis.com/oauth2/v2/userinfo',
@@ -25,7 +26,18 @@ const PROVIDERS = {
     clientSec: process.env.GOOGLE_CLIENT_SECRET,
     scope:     'openid email profile',
   },
+  github: {
+    label:     'GitHub',
+    authUrl:   'https://github.com/login/oauth/authorize',
+    tokenUrl:  'https://github.com/login/oauth/access_token',
+    userUrl:   'https://api.github.com/user',
+    emailsUrl: 'https://api.github.com/user/emails',
+    clientId:  process.env.GITHUB_CLIENT_ID,
+    clientSec: process.env.GITHUB_CLIENT_SECRET,
+    scope:     'read:user user:email',
+  },
   discord: {
+    label:     'Discord',
     authUrl:   'https://discord.com/api/oauth2/authorize',
     tokenUrl:  'https://discord.com/api/oauth2/token',
     userUrl:   'https://discord.com/api/users/@me',
@@ -34,6 +46,7 @@ const PROVIDERS = {
     scope:     'identify email',
   },
   facebook: {
+    label:     'Facebook',
     authUrl:   'https://www.facebook.com/v19.0/dialog/oauth',
     tokenUrl:  'https://graph.facebook.com/v19.0/oauth/access_token',
     userUrl:   'https://graph.facebook.com/me?fields=id,name,email',
@@ -43,6 +56,7 @@ const PROVIDERS = {
   },
   // X uses OAuth 2.0 with PKCE — code_verifier is embedded in signed state JWT
   twitter: {
+    label:     'X',
     authUrl:   'https://twitter.com/i/oauth2/authorize',
     tokenUrl:  'https://api.twitter.com/2/oauth2/token',
     userUrl:   'https://api.twitter.com/2/users/me?user.fields=id,name,username',
@@ -70,6 +84,27 @@ function callbackUrl(req, provider) {
   return `${backendBaseUrl(req)}/api/auth/${provider}/callback`;
 }
 
+function isConfigured(provider) {
+  return Boolean(provider?.clientId && provider?.clientSec);
+}
+
+async function fetchGithubEmail(accessToken, provider) {
+  const emailRes = await fetch(provider.emailsUrl, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: 'application/json',
+      'User-Agent': 'GamePulse/1.0',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+  if (!emailRes.ok) return null;
+
+  const emails = await emailRes.json();
+  const primary = emails.find((item) => item.primary && item.verified);
+  const verified = emails.find((item) => item.verified);
+  return primary?.email || verified?.email || null;
+}
+
 // Normalize profile from each provider into { providerId, username, email }
 async function normalizeProfile(providerName, profile, accessToken, p) {
   if (providerName === 'google') {
@@ -77,6 +112,15 @@ async function normalizeProfile(providerName, profile, accessToken, p) {
       providerId: String(profile.id),
       username:   (profile.name || '').replace(/\s+/g, '').slice(0, 28) || `user${String(profile.id).slice(0, 8)}`,
       email:      profile.email,
+    };
+  }
+  if (providerName === 'github') {
+    const fallbackName = profile.login || `gh${profile.id}`;
+    const email = profile.email || await fetchGithubEmail(accessToken, p) || `gh_${profile.id}@noreply.github.com`;
+    return {
+      providerId: String(profile.id),
+      username:   fallbackName.slice(0, 28),
+      email,
     };
   }
   if (providerName === 'discord') {
@@ -105,11 +149,22 @@ async function normalizeProfile(providerName, profile, accessToken, p) {
   throw new Error('Unknown provider');
 }
 
+router.get('/providers', (req, res) => {
+  res.json({
+    providers: Object.entries(PROVIDERS).map(([key, provider]) => ({
+      key,
+      label: provider.label,
+      enabled: isConfigured(provider),
+      url: isConfigured(provider) ? `${backendBaseUrl(req)}/api/auth/${key}` : null,
+    })),
+  });
+});
+
 // ── GET /api/auth/:provider ────────────────────────────────────────────────
 router.get('/:provider', (req, res) => {
   const providerName = req.params.provider;
   const p = PROVIDERS[providerName];
-  if (!p || !p.clientId) {
+  if (!p || !isConfigured(p)) {
     return res.status(404).json({ error: `Provider "${providerName}" is not configured` });
   }
 
@@ -137,7 +192,7 @@ router.get('/:provider', (req, res) => {
 router.get('/:provider/callback', async (req, res) => {
   const providerName = req.params.provider;
   const p = PROVIDERS[providerName];
-  if (!p) return res.redirect(`${FRONTEND}/login?error=unknown_provider`);
+  if (!p || !isConfigured(p)) return res.redirect(`${FRONTEND}/login?error=unknown_provider`);
 
   const { code, state, error } = req.query;
   if (error || !code) return res.redirect(`${FRONTEND}/login?error=access_denied`);
@@ -175,7 +230,9 @@ router.get('/:provider/callback', async (req, res) => {
     const tokenRes = await fetch(p.tokenUrl, { method: 'POST', headers: tokenHeaders, body: tokenBody });
     const tokenData = await tokenRes.json();
     const accessToken = tokenData.access_token;
-    if (!accessToken) throw new Error('No access token received');
+    if (!tokenRes.ok || !accessToken) {
+      throw new Error(tokenData.error_description || tokenData.error || 'No access token received');
+    }
 
     // Fetch user profile
     const profileRes = await fetch(p.userUrl, {
@@ -183,9 +240,13 @@ router.get('/:provider/callback', async (req, res) => {
         Authorization: `Bearer ${accessToken}`,
         'User-Agent': 'SCORE-NBA-App/1.0',
         Accept: 'application/json',
+        ...(providerName === 'github' ? { 'X-GitHub-Api-Version': '2022-11-28' } : {}),
       },
     });
     const profile = await profileRes.json();
+    if (!profileRes.ok) {
+      throw new Error(profile.message || `Failed to fetch ${providerName} profile`);
+    }
 
     const { providerId, username, email } = await normalizeProfile(providerName, profile, accessToken, p);
     if (!providerId) throw new Error('Could not read user ID from provider');
