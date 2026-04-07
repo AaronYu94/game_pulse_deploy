@@ -4,10 +4,10 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { apiGetAuthProviders, apiLogin, apiRegister } from '../lib/api.js';
 
 const DEFAULT_PROVIDERS = [
-  { key: 'google', label: 'Google', enabled: false, url: null, blurb: 'Fast sign-in with your Google account.' },
-  { key: 'twitter', label: 'X', enabled: false, url: null, blurb: 'Jump in with X for quick social access.' },
-  { key: 'discord', label: 'Discord', enabled: false, url: null, blurb: 'Perfect if your community already lives on Discord.' },
-  { key: 'facebook', label: 'Facebook', enabled: false, url: null, blurb: 'Keep it familiar with Facebook sign-in.' },
+  { key: 'google', label: 'Google', enabled: false, url: null },
+  { key: 'twitter', label: 'X', enabled: false, url: null },
+  { key: 'discord', label: 'Discord', enabled: false, url: null },
+  { key: 'facebook', label: 'Facebook', enabled: false, url: null },
 ];
 
 function ProviderIcon({ providerKey }) {
@@ -74,7 +74,6 @@ export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const [tab, setTab] = useState('login');
   const [providers, setProviders] = useState(DEFAULT_PROVIDERS);
-  const [providersLoading, setProvidersLoading] = useState(true);
   const [authNotice, setAuthNotice] = useState('');
 
   // login form
@@ -111,9 +110,6 @@ export default function LoginPage() {
       })
       .catch(() => {
         if (!ignore) setProviders(DEFAULT_PROVIDERS);
-      })
-      .finally(() => {
-        if (!ignore) setProvidersLoading(false);
       });
 
     return () => { ignore = true; };
@@ -303,45 +299,27 @@ export default function LoginPage() {
           color: var(--text-sub);
         }
         .auth-card-social {
-          padding: 1rem;
-          border: 1px solid var(--border);
-          background: rgba(255,255,255,0.025);
-          margin-bottom: 1.25rem;
-        }
-        .auth-card-social__head {
           display: flex;
-          align-items: baseline;
-          justify-content: space-between;
-          gap: 1rem;
-          margin-bottom: 0.9rem;
-        }
-        .auth-card-social__title {
-          font-family: var(--f-display);
-          font-size: 1.2rem;
-          letter-spacing: 0.04em;
-        }
-        .auth-card-social__meta {
-          font-size: 0.72rem;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
+          justify-content: center;
+          margin-bottom: 1.2rem;
         }
         .auth-provider-grid {
           display: grid;
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          gap: 0.85rem;
+          grid-template-columns: repeat(4, minmax(0, 56px));
+          justify-content: center;
+          gap: 0.75rem;
         }
         .oauth-card {
-          display: flex;
-          align-items: flex-start;
-          gap: 0.85rem;
-          width: 100%;
-          min-height: 104px;
-          padding: 0.95rem;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 56px;
+          height: 56px;
+          min-height: 56px;
+          padding: 0;
           border: 1px solid var(--border);
           background: rgba(255,255,255,0.025);
           color: var(--text);
-          text-align: left;
           cursor: pointer;
           transition: transform .16s ease, border-color .16s ease, background .16s ease;
         }
@@ -352,22 +330,21 @@ export default function LoginPage() {
         }
         .oauth-card:disabled {
           cursor: not-allowed;
-          opacity: 0.55;
+          opacity: 0.38;
         }
         .oauth-card__mark {
-          width: 42px;
-          height: 42px;
+          width: 100%;
+          height: 100%;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          border: 1px solid var(--border-mid);
-          background: rgba(255,255,255,0.04);
+          border: none;
+          background: transparent;
           border-radius: 10px;
-          flex-shrink: 0;
         }
         .oauth-card__mark svg {
-          width: 22px;
-          height: 22px;
+          width: 24px;
+          height: 24px;
           display: block;
         }
         .oauth-card__mark--twitter,
@@ -379,31 +356,6 @@ export default function LoginPage() {
         }
         .oauth-card__mark--facebook {
           color: #1877F2;
-        }
-        .oauth-card__body {
-          display: flex;
-          flex-direction: column;
-          gap: 0.25rem;
-          min-width: 0;
-        }
-        .oauth-card__title {
-          font-weight: 700;
-          font-size: 0.92rem;
-        }
-        .oauth-card__copy {
-          font-size: 0.78rem;
-          color: var(--text-sub);
-          line-height: 1.35;
-        }
-        .oauth-card__status {
-          margin-top: auto;
-          font-size: 0.72rem;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          color: var(--text-muted);
-        }
-        .oauth-card__status.ready {
-          color: var(--success);
         }
         .auth-divider {
           display: flex;
@@ -515,9 +467,11 @@ export default function LoginPage() {
           .auth-card {
             padding: 1.6rem 1.2rem;
           }
-          .auth-feature-grid,
-          .auth-provider-grid {
+          .auth-feature-grid {
             grid-template-columns: 1fr;
+          }
+          .auth-provider-grid {
+            grid-template-columns: repeat(4, minmax(0, 56px));
           }
         }
       `}</style>
@@ -568,13 +522,6 @@ export default function LoginPage() {
             <div className="auth-card-subtitle">Use social sign-in for speed, or keep it classic with email and password.</div>
 
             <div className="auth-card-social">
-              <div className="auth-card-social__head">
-                <div className="auth-card-social__title">Social Sign-In</div>
-                <div className="auth-card-social__meta">
-                  {providersLoading ? 'Checking...' : `${providers.filter((provider) => provider.enabled).length} live now`}
-                </div>
-              </div>
-
               <div className="auth-provider-grid">
                 {providers.map((provider) => (
                   <button
@@ -582,17 +529,12 @@ export default function LoginPage() {
                     type="button"
                     className="oauth-card"
                     disabled={!provider.enabled}
+                    aria-label={`Continue with ${provider.label}`}
+                    title={provider.enabled ? `Continue with ${provider.label}` : `${provider.label} is not configured yet`}
                     onClick={() => handleSocialLogin(provider)}
                   >
                     <span className={`oauth-card__mark oauth-card__mark--${provider.key}`}>
                       <ProviderIcon providerKey={provider.key} />
-                    </span>
-                    <span className="oauth-card__body">
-                      <span className="oauth-card__title">Continue with {provider.label}</span>
-                      <span className="oauth-card__copy">{provider.blurb}</span>
-                      <span className={`oauth-card__status${provider.enabled ? ' ready' : ''}`}>
-                        {provider.enabled ? 'Ready now' : 'Not configured yet'}
-                      </span>
                     </span>
                   </button>
                 ))}
