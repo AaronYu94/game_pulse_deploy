@@ -25,15 +25,17 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
-// GET /api/shop/inventory  — stickers with quantity > 0
+// GET /api/shop/inventory  — all owned items
 router.get('/inventory', auth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT si.*, ui.quantity
+      `SELECT si.*, ui.quantity,
+              (u.equipped_title_id = si.id) AS equipped
        FROM user_items ui
        JOIN shop_items si ON si.id = ui.item_id
-       WHERE ui.user_id = $1 AND ui.quantity > 0 AND si.type = 'sticker'
-       ORDER BY si.price ASC`,
+       JOIN users u ON u.id = ui.user_id
+       WHERE ui.user_id = $1 AND ui.quantity > 0
+       ORDER BY si.type ASC, si.price ASC`,
       [req.user.id]
     );
     res.json({ items: rows });

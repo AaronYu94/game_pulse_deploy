@@ -4,7 +4,7 @@ const jwt    = require('jsonwebtoken');
 const db     = require('../db');
 
 const FRONTEND = process.env.FRONTEND_URL || 'http://localhost:5173';
-const BACKEND  = process.env.BACKEND_URL  || 'http://localhost:3000';
+const BACKEND  = process.env.BACKEND_URL;
 const SECRET   = process.env.JWT_SECRET;
 
 // ── PKCE helpers (required by X/Twitter OAuth 2.0) ────────────────────────
@@ -61,8 +61,13 @@ function signToken(user) {
   );
 }
 
-function callbackUrl(provider) {
-  return `${BACKEND}/api/auth/${provider}/callback`;
+function backendBaseUrl(req) {
+  if (BACKEND) return BACKEND;
+  return `${req.protocol}://${req.get('host')}`;
+}
+
+function callbackUrl(req, provider) {
+  return `${backendBaseUrl(req)}/api/auth/${provider}/callback`;
 }
 
 // Normalize profile from each provider into { providerId, username, email }
@@ -110,7 +115,7 @@ router.get('/:provider', (req, res) => {
 
   const params = new URLSearchParams({
     client_id:     p.clientId,
-    redirect_uri:  callbackUrl(providerName),
+    redirect_uri:  callbackUrl(req, providerName),
     response_type: 'code',
     scope:         p.scope,
   });
@@ -150,7 +155,7 @@ router.get('/:provider/callback', async (req, res) => {
     const tokenBody = new URLSearchParams({
       client_id:    p.clientId,
       code,
-      redirect_uri: callbackUrl(providerName),
+      redirect_uri: callbackUrl(req, providerName),
       grant_type:   'authorization_code',
     });
     if (codeVerifier) tokenBody.set('code_verifier', codeVerifier);
