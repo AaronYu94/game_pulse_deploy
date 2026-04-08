@@ -30,6 +30,72 @@ function timeAgo(dateStr) {
 
 const BET_CHIPS = [10, 25, 50, 100, 250];
 
+function parseRecord(record) {
+  if (!record) return 0.5;
+  const parts = record.split('-').map(Number);
+  const w = parts[0] || 0, l = parts[1] || 0;
+  return w + l === 0 ? 0.5 : w / (w + l);
+}
+
+// Log5 formula + home court boost (~4%)
+function computeOdds(homeRecord, awayRecord) {
+  const hwp = parseRecord(homeRecord);
+  const awp = parseRecord(awayRecord);
+  const denom = hwp + awp - 2 * hwp * awp;
+  let homeProb = denom > 0 ? (hwp - hwp * awp) / denom : 0.5;
+  homeProb = Math.max(0.05, Math.min(0.95, homeProb + 0.04));
+  return {
+    homeProb: Math.round(homeProb * 100),
+    awayProb: Math.round((1 - homeProb) * 100),
+  };
+}
+
+function toMoneyline(prob) {
+  if (prob >= 50) return `-${Math.round((prob / (100 - prob)) * 100)}`;
+  return `+${Math.round(((100 - prob) / prob) * 100)}`;
+}
+
+function WinOddsBar({ home, away }) {
+  if (!home?.record && !away?.record) return null;
+  const { homeProb, awayProb } = computeOdds(home?.record, away?.record);
+  const awayFav = awayProb > homeProb;
+  const homeFav = homeProb > awayProb;
+  return (
+    <div className="win-odds-bar">
+      <div className="win-odds-bar__row">
+        <div className="win-odds-bar__team">
+          <span className="win-odds-bar__abbr">{away?.abbr}</span>
+          {awayFav && <span className="win-odds-bar__fav">FAV</span>}
+        </div>
+        <div className="win-odds-bar__team win-odds-bar__team--right">
+          {homeFav && <span className="win-odds-bar__fav">FAV</span>}
+          <span className="win-odds-bar__abbr">{home?.abbr}</span>
+        </div>
+      </div>
+      <div className="win-odds-bar__track">
+        <div
+          className="win-odds-bar__fill win-odds-bar__fill--away"
+          style={{ width: `${awayProb}%` }}
+        />
+        <div
+          className="win-odds-bar__fill win-odds-bar__fill--home"
+          style={{ width: `${homeProb}%` }}
+        />
+      </div>
+      <div className="win-odds-bar__row">
+        <div>
+          <span className="win-odds-bar__pct">{awayProb}%</span>
+          <span className="win-odds-bar__ml">{toMoneyline(awayProb)}</span>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <span className="win-odds-bar__pct">{homeProb}%</span>
+          <span className="win-odds-bar__ml">{toMoneyline(homeProb)}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BetSection({ gameInfo, coins, existingBet, onBetPlaced, canBet, loginHref }) {
   const [pick, setPick] = useState('');
   const [amount, setAmount] = useState(25);
@@ -70,6 +136,8 @@ function BetSection({ gameInfo, coins, existingBet, onBetPlaced, canBet, loginHr
     finally { setLoading(false); }
   }
 
+  const { homeProb, awayProb } = computeOdds(gameInfo.home?.record, gameInfo.away?.record);
+
   if (existingBet) {
     const resultClass = existingBet.settled ? (existingBet.won ? 'bet-placed-card--won' : 'bet-placed-card--lost') : '';
     const pickLabel = existingBet.pick === 'home' ? existingBet.home_abbr : existingBet.away_abbr;
@@ -79,7 +147,8 @@ function BetSection({ gameInfo, coins, existingBet, onBetPlaced, canBet, loginHr
           <div className="bet-section__title">Your Prediction</div>
           <div className="bet-section__balance"><span>SC</span><span>{coins ?? '—'}</span></div>
         </div>
-        <div className={`bet-placed-card ${resultClass}`}>
+        <WinOddsBar home={gameInfo.home} away={gameInfo.away} />
+        <div className={`bet-placed-card ${resultClass}`} style={{ marginTop: 8 }}>
           <div>
             <div className="bet-placed-card__pick">{pickLabel} to win</div>
             <div className="bet-placed-card__amount"><strong>{existingBet.amount} SC</strong> wagered</div>
@@ -100,15 +169,18 @@ function BetSection({ gameInfo, coins, existingBet, onBetPlaced, canBet, loginHr
         <div className="bet-section__title">Place Prediction</div>
         <div className="bet-section__balance"><span>SC</span><span>{coins ?? '—'}</span></div>
       </div>
-      <div className="bet-picks">
+      <WinOddsBar home={gameInfo.home} away={gameInfo.away} />
+      <div className="bet-picks" style={{ marginTop: 8 }}>
         <div className={`bet-pick-card${pick === 'away' ? ' selected' : ''}`} onClick={() => setPick('away')}>
           <div className="bet-pick-card__team">{gameInfo.away.abbr}</div>
-          <div className="bet-pick-card__label">Away</div>
+          <div className="bet-pick-card__pct">{awayProb}%</div>
+          <div className="bet-pick-card__label">Away · {toMoneyline(awayProb)}</div>
         </div>
         <div className="bet-vs-sep">vs</div>
         <div className={`bet-pick-card${pick === 'home' ? ' selected' : ''}`} onClick={() => setPick('home')}>
           <div className="bet-pick-card__team">{gameInfo.home.abbr}</div>
-          <div className="bet-pick-card__label">Home</div>
+          <div className="bet-pick-card__pct">{homeProb}%</div>
+          <div className="bet-pick-card__label">Home · {toMoneyline(homeProb)}</div>
         </div>
       </div>
       <div className="bet-amount-row">
