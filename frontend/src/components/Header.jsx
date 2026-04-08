@@ -1,5 +1,108 @@
-import { Link, useLocation } from 'react-router-dom';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { apiGetNotifications, apiMarkAllRead, apiMarkRead } from '../lib/api.js';
+
+function timeAgo(dateStr) {
+  if (!dateStr) return '';
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return new Date(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+function NotificationBell() {
+  const [unread, setUnread] = useState(0);
+  const [notifications, setNotifications] = useState([]);
+  const [open, setOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const navigate = useNavigate();
+
+  const fetchNotifs = useCallback(async () => {
+    try {
+      const data = await apiGetNotifications();
+      setNotifications(data.notifications || []);
+      setUnread(data.unread || 0);
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(interval);
+  }, [fetchNotifs]);
+
+  // Close on outside click
+  useEffect(() => {
+    if (!open) return;
+    function handle(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
+  }, [open]);
+
+  async function handleMarkAll() {
+    await apiMarkAllRead().catch(() => {});
+    setNotifications(n => n.map(x => ({ ...x, read: true })));
+    setUnread(0);
+  }
+
+  async function handleClick(notif) {
+    if (!notif.read) {
+      await apiMarkRead(notif.id).catch(() => {});
+      setNotifications(n => n.map(x => x.id === notif.id ? { ...x, read: true } : x));
+      setUnread(u => Math.max(0, u - 1));
+    }
+    setOpen(false);
+    if (notif.link) navigate(notif.link);
+  }
+
+  return (
+    <div className="notif-bell-wrap" ref={dropdownRef}>
+      <button className="notif-bell" onClick={() => setOpen(v => !v)} aria-label="Notifications">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+        </svg>
+        {unread > 0 && <span className="notif-badge">{unread > 9 ? '9+' : unread}</span>}
+      </button>
+      {open && (
+        <div className="notif-dropdown">
+          <div className="notif-dropdown__header">
+            <span className="notif-dropdown__title">Notifications</span>
+            {unread > 0 && (
+              <button className="notif-mark-all" onClick={handleMarkAll}>Mark all read</button>
+            )}
+          </div>
+          <div className="notif-dropdown__list">
+            {notifications.length === 0 ? (
+              <div className="notif-empty">No notifications yet</div>
+            ) : (
+              notifications.map(n => (
+                <div
+                  key={n.id}
+                  className={`notif-item${n.read ? '' : ' notif-item--unread'}`}
+                  onClick={() => handleClick(n)}
+                >
+                  {!n.read && <div className="notif-dot" />}
+                  <div className="notif-item__content">
+                    <div className="notif-item__title">{n.title}</div>
+                    {n.body && <div className="notif-item__body">{n.body}</div>}
+                    <div className="notif-item__time">{timeAgo(n.created_at)}</div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Header({ searchPlaceholder = 'Search players, teams...' }) {
   const { user, logout } = useAuth();
@@ -20,6 +123,7 @@ export default function Header({ searchPlaceholder = 'Search players, teams...' 
       <div className="header-right">
         {user ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <NotificationBell />
             <Link
               to="/profile"
               className="header-notif-text"

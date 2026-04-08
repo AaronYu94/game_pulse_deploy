@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db     = require('../db');
 const auth   = require('../middleware/auth');
+const notify = require('../notify');
 
 // GET /api/bets — all bets for current user
 router.get('/', auth, async (req, res) => {
@@ -108,6 +109,14 @@ router.post('/settle', auth, async (req, res) => {
             [bet.amount * 2, bet.user_id]
           );
         }
+        await notify(bet.user_id, {
+          type: bet.won ? 'bet_won' : 'bet_lost',
+          title: bet.won ? '🏆 Prediction Correct!' : '❌ Prediction Wrong',
+          body: bet.won
+            ? `Your ${bet.pick} pick won you ${bet.amount * 2} SC!`
+            : `Your ${bet.pick} pick lost. Better luck next time.`,
+          link: `/game?id=${g.id}`,
+        });
         settled++;
       }
     }

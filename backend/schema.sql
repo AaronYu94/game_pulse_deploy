@@ -203,3 +203,15 @@ CREATE INDEX IF NOT EXISTS idx_player_ratings_game      ON player_ratings(game_i
 CREATE INDEX IF NOT EXISTS idx_shop_items_type          ON shop_items(type);
 CREATE INDEX IF NOT EXISTS idx_user_items_user_id       ON user_items(user_id);
 CREATE INDEX IF NOT EXISTS idx_game_chats_game_id       ON game_chats(game_id);
+
+CREATE TABLE IF NOT EXISTS notifications (
+  id         SERIAL PRIMARY KEY,
+  user_id    INTEGER REFERENCES users(id) ON DELETE CASCADE,
+  type       VARCHAR(30) NOT NULL,
+  title      VARCHAR(100) NOT NULL,
+  body       VARCHAR(200),
+  link       VARCHAR(200),
+  read       BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notif_user ON notifications(user_id, read, created_at DESC);

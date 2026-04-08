@@ -124,7 +124,8 @@ app.use('/api/comments', require('./routes/comments'));
 app.use('/api/forum',    require('./routes/forum'));
 app.use('/api/profile',  require('./routes/profile'));
 app.use('/api/chat',     require('./routes/chat'));
-app.use('/api/shop',     require('./routes/shop'));
+app.use('/api/shop',          require('./routes/shop'));
+app.use('/api/notifications', require('./routes/notifications'));
 
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not found' }));

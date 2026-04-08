@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const db     = require('../db');
 const auth   = require('../middleware/auth');
+const notify = require('../notify');
 
 // GET /api/forum/topics?cat=&sort=&q=
 router.get('/topics', auth.optional, async (req, res) => {
@@ -130,6 +131,18 @@ router.post('/topics/:id/replies', auth, async (req, res) => {
         quoteText?.trim()   || null,
       ]
     );
+    // Notify topic owner if different user
+    db.query('SELECT user_id, title FROM forum_topics WHERE id = $1', [id])
+      .then(r => {
+        if (r.rows[0] && r.rows[0].user_id !== req.user.id) {
+          notify(r.rows[0].user_id, {
+            type: 'forum_reply',
+            title: '💬 New Reply on Your Topic',
+            body: `${req.user.username} replied to "${r.rows[0].title.slice(0, 50)}"`,
+            link: `/forum`,
+          });
+        }
+      }).catch(() => {});
     res.status(201).json({ post: { ...rows[0], likes: 0, liked_by_me: false } });
   } catch (err) {
     console.error(err);

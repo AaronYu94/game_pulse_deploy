@@ -130,6 +130,17 @@ export async function apiDislikeReply(postId) {
   return apiFetch(`/api/forum/replies/${postId}/dislike`, { method: 'POST', body: {} });
 }
 
+// Notifications
+export async function apiGetNotifications() {
+  return apiFetch('/api/notifications');
+}
+export async function apiMarkAllRead() {
+  return apiFetch('/api/notifications/read-all', { method: 'POST', body: {} });
+}
+export async function apiMarkRead(id) {
+  return apiFetch(`/api/notifications/${id}/read`, { method: 'POST', body: {} });
+}
+
 // Chat
 export async function apiGetChat(gameId) {
   const data = await apiFetch(`/api/chat/${gameId}`);
