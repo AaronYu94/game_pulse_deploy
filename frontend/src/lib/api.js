@@ -4,7 +4,7 @@ const API_BASE = import.meta.env.VITE_API_URL || '';
 
 function getToken() { return localStorage.getItem('score_token'); }
 
-async function apiFetch(path, options = {}) {
+export async function apiFetch(path, options = {}) {
   const token = getToken();
   const hasBody = options.body !== undefined;
   const res = await fetch(API_BASE + path, {

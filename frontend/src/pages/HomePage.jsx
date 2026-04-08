@@ -6,6 +6,7 @@ import {
   apiSettleBets, apiGetAllBets, apiGetCoins, apiClaimTask, DAILY_TASK_DEFS,
 } from '../lib/api.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import HoopOfTheDay from '../components/HoopOfTheDay.jsx';
 
 const ALL_DAYS  = monthCalendarDays();
 const TODAY_KEY = toESPNDate(new Date());
@@ -473,6 +474,7 @@ export default function HomePage() {
               <div className="coin-widget__sub">Predict &amp; win coins</div>
             </div>
 
+            <HoopOfTheDay onCoinsUpdate={setCoins} />
             <TasksPanel coins={coins} tasks={taskState} />
           </>
         ) : (
