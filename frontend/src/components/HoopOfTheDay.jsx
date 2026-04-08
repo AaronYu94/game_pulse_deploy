@@ -44,9 +44,26 @@ function getState() {
     const d = JSON.parse(localStorage.getItem(HOTD_KEY));
     if (d && d.date === new Date().toDateString()) return d;
   } catch (_) {}
-  return { date: new Date().toDateString(), shotsLeft: HOTD_MAX, earned: 0 };
+  return { date: new Date().toDateString(), shotsLeft: HOTD_MAX, earned: 0, madeCount: 0 };
 }
 function saveState(s) { localStorage.setItem(HOTD_KEY, JSON.stringify(s)); }
+
+// Difficulty scales with madeCount (shots made today)
+function dynSpeed(type, madeCount) {
+  const base = type === '3pt' ? 2.3 : 1.8;
+  return base + madeCount * 0.35;
+}
+function dynSweet(type, madeCount) {
+  if (type === '2pt') {
+    const shrink = madeCount * 3;
+    return [30 + shrink, 70 - shrink];
+  } else {
+    const shrink = madeCount * 2;
+    return [41 + shrink, 59 - shrink];
+  }
+}
+const DIFF_LABELS = ['EASY', 'MEDIUM', 'HARD', 'VERY HARD', 'INSANE', 'LEGENDARY'];
+function diffLabel(n) { return DIFF_LABELS[Math.min(n, DIFF_LABELS.length - 1)]; }
 
 function arc(x0, y0, x1, y1, frames) {
   const cpX = (x0 + x1) / 2;
@@ -116,6 +133,7 @@ export default function HoopOfTheDay({ onCoinsUpdate }) {
   const [open, setOpen] = useState(false);
   const [shotsLeft, setShotsLeft] = useState(() => getState().shotsLeft);
   const [earned, setEarned] = useState(() => getState().earned);
+  const [madeCount, setMadeCount] = useState(() => getState().madeCount || 0);
 
   // Game state refs (for canvas loop)
   const canvasRef   = useRef(null);
@@ -142,6 +160,7 @@ export default function HoopOfTheDay({ onCoinsUpdate }) {
     const s = hotdGet();
     setShotsLeft(s.shotsLeft);
     setEarned(s.earned);
+    setMadeCount(s.madeCount || 0);
     const g = gameRef.current;
     g.phase = 'choose'; g.type = '2pt'; g.meter = 0;
     g.crowdState = 0; g.netWobble = 0; g.confetti = [];
@@ -158,7 +177,7 @@ export default function HoopOfTheDay({ onCoinsUpdate }) {
   function resetGame() {
     localStorage.removeItem(HOTD_KEY);
     const s = hotdGet();
-    setShotsLeft(s.shotsLeft); setEarned(s.earned);
+    setShotsLeft(s.shotsLeft); setEarned(s.earned); setMadeCount(0);
     const g = gameRef.current;
     g.phase = 'choose'; g.type = '2pt'; g.crowdState = 0;
     g.netWobble = 0; g.confetti = []; g.flyDone = false;
@@ -179,15 +198,17 @@ export default function HoopOfTheDay({ onCoinsUpdate }) {
 
   function startAim() {
     const g = gameRef.current;
+    const mc = getState().madeCount || 0;
     g.phase = 'aim';
     g.meter = 0; g.dir = 1;
-    g.speed = g.type === '3pt' ? 2.3 : 1.8;
+    g.speed = dynSpeed(g.type, mc);
     setPhase('aim');
   }
 
   function shoot() {
     const g = gameRef.current;
-    const [lo, hi] = SWEET[g.type];
+    const mc = getState().madeCount || 0;
+    const [lo, hi] = dynSweet(g.type, mc);
     g.made = g.meter >= lo && g.meter <= hi;
     const start = SHOT_POS[g.type];
     let tx = HX, ty = HY + 4;
@@ -220,9 +241,11 @@ export default function HoopOfTheDay({ onCoinsUpdate }) {
     const s = hotdGet();
     s.earned += coinsEarned;
     s.shotsLeft--;
+    if (g.made) { s.madeCount = (s.madeCount || 0) + 1; }
     saveState(s);
     setShotsLeft(s.shotsLeft);
     setEarned(s.earned);
+    setMadeCount(s.madeCount || 0);
     g.phase = 'result';
     setPhase('result');
     setResult({ made: g.made, earned: coinsEarned });
@@ -496,9 +519,16 @@ export default function HoopOfTheDay({ onCoinsUpdate }) {
               ) : phase === 'aim' ? (
                 <>
                   <div className="hotd-meter-wrap">
-                    <div className="hotd-meter-label">TIME YOUR RELEASE — CLICK WHEN INDICATOR HITS THE ZONE</div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                      <div className="hotd-meter-label">TIME YOUR RELEASE</div>
+                      {madeCount > 0 && (
+                        <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.08em', fontFamily: 'var(--f-display)', color: madeCount >= 4 ? '#e60000' : madeCount >= 2 ? '#f59e0b' : '#22c55e' }}>
+                          {diffLabel(madeCount)} +{madeCount}
+                        </div>
+                      )}
+                    </div>
                     <div className="hotd-meter-track">
-                      <div className={`hotd-meter-zone${type === '3pt' ? ' tight' : ''}`} style={{ left: `${SWEET[type][0]}%`, width: `${SWEET[type][1] - SWEET[type][0]}%` }} />
+                      <div className={`hotd-meter-zone${type === '3pt' || madeCount >= 2 ? ' tight' : ''}`} style={{ left: `${dynSweet(type, madeCount)[0]}%`, width: `${dynSweet(type, madeCount)[1] - dynSweet(type, madeCount)[0]}%` }} />
                       <div className="hotd-meter-indicator" style={{ left: `${meterPct.toFixed(1)}%` }} />
                     </div>
                   </div>
