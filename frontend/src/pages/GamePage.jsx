@@ -731,7 +731,7 @@ export default function GamePage() {
           />
         </div>
 
-        {gameId && <LiveChat gameId={gameId} />}
+        {gameId && inProgress && <LiveChat gameId={gameId} />}
       </aside>
 
       {toast && <div className="coin-toast">{toast}</div>}
