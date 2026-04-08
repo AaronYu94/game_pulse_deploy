@@ -1,10 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, useNavigate, Link, useLocation } from 'react-router-dom';
+import { io } from 'socket.io-client';
 import Header, { SideNav } from '../components/Header.jsx';
 import {
   apiGetCoins, apiGetBet, apiPlaceBet,
   apiGetAllPlayerRatings, apiRatePlayer,
   apiGetComments, apiPostComment, apiLikeComment, apiClaimTask,
+  apiGetChat,
 } from '../lib/api.js';
 import { fetchGames, fetchGameDetail, toESPNDate, scoreColor, getTeamColors } from '../lib/espn.js';
 import { useAuth } from '../contexts/AuthContext.jsx';
@@ -236,6 +238,91 @@ function BoxscoreTable({ team, playerRatings, onRatePlayer, canRate, onRequireAu
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+function LiveChat({ gameId }) {
+  const [messages, setMessages] = useState([]);
+  const [text, setText] = useState('');
+  const [sending, setSending] = useState(false);
+  const socketRef = useRef(null);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    if (!gameId) return;
+
+    // Load history
+    apiGetChat(gameId).then(setMessages).catch(() => {});
+
+    // Connect socket
+    const token = localStorage.getItem('score_token');
+    const socket = io({ auth: { token }, transports: ['websocket', 'polling'] });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      socket.emit('join_game', gameId);
+    });
+
+    socket.on('new_message', (msg) => {
+      setMessages(prev => [...prev, msg]);
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [gameId]);
+
+  // Auto-scroll to bottom on new messages
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function handleSend(e) {
+    e.preventDefault();
+    if (!text.trim() || !socketRef.current) return;
+    setSending(true);
+    socketRef.current.emit('send_message', { gameId, content: text.trim() });
+    setText('');
+    setSending(false);
+  }
+
+  return (
+    <div className="live-chat">
+      <div className="live-chat__header">
+        <span className="live-dot" style={{ marginRight: 6 }} />
+        Live Chat
+      </div>
+      <div className="live-chat__messages">
+        {messages.length === 0 ? (
+          <div className="live-chat__empty">Be first to say something!</div>
+        ) : (
+          messages.map(m => (
+            <div key={m.id} className="chat-msg">
+              <span className="chat-msg__user">
+                {m.title_emoji && <span className="chat-msg__title">{m.title_emoji}</span>}
+                {m.username}
+              </span>
+              {m.title_name && <span className="chat-msg__title-name">{m.title_name}</span>}
+              <span className="chat-msg__text">{m.content}</span>
+              <span className="chat-msg__time">{timeAgo(m.created_at)}</span>
+            </div>
+          ))
+        )}
+        <div ref={bottomRef} />
+      </div>
+      <form className="live-chat__form" onSubmit={handleSend}>
+        <input
+          className="live-chat__input"
+          placeholder="Say something…"
+          value={text}
+          onChange={e => setText(e.target.value)}
+          maxLength={200}
+        />
+        <button className="live-chat__send" type="submit" disabled={sending || !text.trim()}>
+          ↑
+        </button>
+      </form>
     </div>
   );
 }
@@ -571,6 +658,8 @@ export default function GamePage() {
             }}
           />
         </div>
+
+        {gameId && <LiveChat gameId={gameId} />}
       </aside>
 
       {toast && <div className="coin-toast">{toast}</div>}
