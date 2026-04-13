@@ -1173,6 +1173,7 @@ buildStadiumShell();
 
   const housingMat = new THREE.MeshBasicMaterial({
     color: 0x0a0a0a,
+    depthWrite: false,
   });
 
   // ── 3. Place one ribbon per stand section ─────────────────────────
@@ -1211,7 +1212,7 @@ buildStadiumShell();
     // LED panel: PlaneGeometry facing the court
     const pGeo = new THREE.PlaneGeometry(w - 0.2, h);
     const panel = new THREE.Mesh(pGeo, ledRibbonMat);
-    panel.position.set(x + nx * 0.16, y, z + nz * 0.16);
+    panel.position.set(x + nx * 0.35, y, z + nz * 0.35);
     panel.rotation.y = rotY;
     scene.add(panel);
 

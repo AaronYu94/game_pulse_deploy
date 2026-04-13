@@ -1175,45 +1175,25 @@ buildStadiumShell();
 
   const housingMat = new THREE.MeshBasicMaterial({
     color: 0x0a0a0a,
+    depthWrite: false,  // never let housing occlude the LED panel in front of it
   });
-
-  // ── 3. Place one ribbon per stand section ─────────────────────────
-  // Position: row 1 front face, center height of row 1.
-  //
-  // FAR SIDELINE:
-  //   addTier(0, -31, 118, 3.5, 7, 3.5, 3.2, 0)
-  //   Row r local: (0, r*3.5 + 1.75, -r*3.2), box depth = 3.5
-  //   Row 1 world center: (0, 5.25, -31 - 3.2) = (0, 5.25, -34.2)
-  //   Row 1 front face (+Z): -34.2 + 1.75 = -32.45
-  //
-  // LEFT END:
-  //   addTier(-53, 0, 66, 3, 6, 3.5, 3.0, π/2)
-  //   Row 1 local: (0, 5.25, -3.0), rot π/2 → world (-3, 5.25, 0) + (-53,0,0)
-  //   World center: (-56, 5.25, 0), box depth = 3
-  //   Front face local +Z at z = -3 + 1.5 = -1.5
-  //   rot π/2 → world x = -1.5, + (-53) = -54.5
-  //   Normal: +X
-  //
-  // RIGHT END:
-  //   addTier(53, 0, 66, 3, 6, 3.5, 3.0, -π/2)
-  //   Front face: x = 54.5, normal: -X
 
   const ledPanels = [];
 
   function addRibbon(x, y, z, w, h, nx, nz) {
     const rotY = Math.atan2(nx, nz);
 
-    // Housing: box frame behind panel
+    // Housing: box frame behind panel (depthWrite=false so it never occludes panel)
     const hGeo = new THREE.BoxGeometry(w, h + 0.1, 0.15);
     const housing = new THREE.Mesh(hGeo, housingMat);
     housing.position.set(x + nx * 0.08, y, z + nz * 0.08);
     housing.rotation.y = rotY;
     scene.add(housing);
 
-    // LED panel: PlaneGeometry facing the court
+    // LED panel: pulled 0.35 units in front so it clears housing top from steep angles
     const pGeo = new THREE.PlaneGeometry(w - 0.2, h);
     const panel = new THREE.Mesh(pGeo, ledRibbonMat);
-    panel.position.set(x + nx * 0.16, y, z + nz * 0.16);
+    panel.position.set(x + nx * 0.35, y, z + nz * 0.35);
     panel.rotation.y = rotY;
     scene.add(panel);
 
