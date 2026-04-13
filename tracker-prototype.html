@@ -329,6 +329,10 @@ scene.add(floor);
   });
   const grooveEdgeMat = new THREE.MeshStandardMaterial({
     color: 0x0a0000, emissive: 0xff1a00, emissiveIntensity: 0.8, side: THREE.DoubleSide,
+    depthWrite: false,           // never let groove lose to a coplanar body top face
+    polygonOffset: true,
+    polygonOffsetFactor: -1,     // pull groove toward camera in depth space
+    polygonOffsetUnits: -4,
   });
   // Outer body
   const body = new THREE.Mesh(new THREE.BoxGeometry(cL + eW * 2, eH, cW + eW * 2), bodyMat);
@@ -339,11 +343,11 @@ scene.add(floor);
   // Recessed emissive grooves along inner boundary (light from cracks)
   for (const zs of [-1, 1]) {
     const g = new THREE.Mesh(new THREE.PlaneGeometry(cL, 0.1), grooveEdgeMat);
-    g.rotation.x = -Math.PI / 2; g.position.set(0, 0.003, zs * (COURT_HALF_W + 0.08)); scene.add(g);
+    g.rotation.x = -Math.PI / 2; g.position.set(0, 0.05, zs * (COURT_HALF_W + 0.08)); scene.add(g);
   }
   for (const xs of [-1, 1]) {
     const g = new THREE.Mesh(new THREE.PlaneGeometry(0.1, cW), grooveEdgeMat);
-    g.rotation.x = -Math.PI / 2; g.position.set(xs * (COURT_HALF_L + 0.08), 0.003, 0); scene.add(g);
+    g.rotation.x = -Math.PI / 2; g.position.set(xs * (COURT_HALF_L + 0.08), 0.05, 0); scene.add(g);
   }
 }
 
@@ -365,8 +369,8 @@ function makeCourtLines() {
 
   function ft(x, z) { return [cx + x * S, cy + z * S]; }
 
-  // Boundary
-  lctx.strokeRect(cx - 47*S, cy - 25*S, 94*S, 50*S);
+  // Boundary — inset by 1px so the full 2px stroke isn't clipped at the canvas edge
+  lctx.strokeRect(cx - 47*S + 1, cy - 25*S + 1, 94*S - 2, 50*S - 2);
 
   // Half court line
   lctx.beginPath();
