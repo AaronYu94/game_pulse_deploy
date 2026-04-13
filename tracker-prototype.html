@@ -2386,15 +2386,36 @@ function step() {
   }
 }
 
+function playDelay(curr, next) {
+  if (curr?.wallclock && next?.wallclock) {
+    const delta = new Date(next.wallclock) - new Date(curr.wallclock);
+    if (delta > 0 && delta < 600000) {
+      return Math.max(150, Math.min(delta / speed, 5000));
+    }
+  }
+  return 1200 / speed;
+}
+
+function scheduleStep() {
+  if (!isPlaying || playhead >= plays.length - 1) { stopPlay(); return; }
+  const curr = plays[playhead];
+  const next = plays[playhead + 1];
+  tickId = setTimeout(() => {
+    if (!isPlaying) return;
+    step();
+    scheduleStep();
+  }, playDelay(curr, next));
+}
+
 function startPlay() {
   isPlaying = true;
   document.getElementById('btnPlay').textContent = '⏸ Pause';
   document.getElementById('btnPlay').classList.add('playing');
-  tickId = setInterval(step, 1200 / speed);
+  scheduleStep();
 }
 function stopPlay() {
   isPlaying = false;
-  clearInterval(tickId);
+  clearTimeout(tickId);
   document.getElementById('btnPlay').textContent = '▶ Play';
   document.getElementById('btnPlay').classList.remove('playing');
 }
