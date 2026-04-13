@@ -134,20 +134,20 @@
   .q-divs { position: absolute; top: 0; left: 0; right: 0; bottom: 0; pointer-events: none; }
   .q-div { position: absolute; top: 0; bottom: 0; width: 1px; background: rgba(60,70,100,0.4); }
 
-  .btn-row { display: flex; align-items: center; gap: 8px; }
+  .btn-row { display: flex; align-items: center; gap: 6px; }
   .btn {
     font-family: var(--font-mono);
-    padding: 0; border: none; border-radius: 0;
-    background: none; color: #554; font-size: 11px;
+    padding: 4px 9px; border: 1px solid rgba(255,255,255,0.1); border-radius: 4px;
+    background: rgba(255,255,255,0.05); color: #778; font-size: 11px;
     cursor: pointer;
-    transition: color .15s ease;
+    transition: background .15s, border-color .15s, color .15s;
   }
-  .btn:hover { color: #cc3; }
-  .btn:active { opacity: 0.7; }
-  .btn.active { color: #dd2233; font-weight: 700; }
-  .btn.play-btn { min-width: auto; font-weight: 700; color: #aaa; font-size: 12px; }
+  .btn:hover { background: rgba(255,255,255,0.1); border-color: rgba(255,255,255,0.2); color: #ccc; }
+  .btn:active { background: rgba(255,255,255,0.06); }
+  .btn.active { background: rgba(200,20,40,0.2); border-color: rgba(200,20,40,0.5); color: #ff4455; }
+  .btn.play-btn { font-weight: 700; color: #bbb; font-size: 12px; padding: 4px 12px; }
   .btn.play-btn:hover { color: #fff; }
-  .btn.play-btn.playing { color: #dd2233; }
+  .btn.play-btn.playing { background: rgba(200,20,40,0.2); border-color: rgba(200,20,40,0.5); color: #ff4455; }
   .count { margin-left: auto; font-family: var(--font-mono); font-size: 13px; color: #334; }
   .legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: #445; flex-wrap: wrap; align-items: center; }
   .ld { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 3px; vertical-align: middle; }
@@ -208,19 +208,7 @@
     display: block; margin-top: 2px;
   }
 
-  /* ── Scoring marks on scrubber ─────────────────── */
-  .score-marks {
-    position: absolute; top: -2px; left: 0; right: 0; bottom: -2px;
-    pointer-events: none;
-  }
-  .score-mark {
-    position: absolute; top: 0; width: 2px; height: 100%;
-    border-radius: 1px; opacity: 0.6;
-    transition: opacity .15s;
-  }
-  .score-mark.three { height: 120%; top: -10%; opacity: 0.8; }
-
-  /* ── Camera preset buttons ─────────────────────── */
+/* ── Camera preset buttons ─────────────────────── */
   .cam-btn { font-size: 10px !important; letter-spacing: 1px; }
 </style>
 </head>
@@ -266,8 +254,7 @@
     <div class="scrubber-wrap">
       <div class="fill" id="fill"></div>
       <div class="q-divs" id="qDivs"></div>
-      <div class="score-marks" id="scoreMarks"></div>
-      <input type="range" class="scrubber" id="scrubber" min="0" max="100" value="0" />
+<input type="range" class="scrubber" id="scrubber" min="0" max="100" value="0" />
     </div>
     <div class="btn-row">
       <button class="btn" id="btnRestart">⏮</button>
@@ -2566,37 +2553,6 @@ function buildTimeline(upToHead) {
   tlList.scrollTop = tlList.scrollHeight;
 }
 
-// ── Scoring marks on scrubber ─────────────────────────────────────────
-function buildScoringMarks() {
-  const container = document.getElementById('scoreMarks');
-  container.innerHTML = '';
-  if (plays.length < 2) return;
-  plays.forEach((p, i) => {
-    if (!p.scoringPlay) return;
-    const pct = i / (plays.length - 1) * 100;
-    const isHome = String(p.team?.id) === String(homeTeamId);
-    const col = isHome ? homeColorHex : awayColorHex;
-    const txt = (p.text || '').toLowerCase();
-    const is3 = txt.includes('three point') || txt.includes('3-pointer') || txt.includes('3pt');
-
-    const mark = document.createElement('div');
-    mark.className = 'score-mark' + (is3 ? ' three' : '');
-    mark.style.left = pct + '%';
-    mark.style.background = col;
-    mark.title = p.text || '';
-    mark.onclick = (e) => {
-      e.stopPropagation();
-      stopPlay();
-      ballMesh.visible = false;
-      playhead = i;
-      renderFrame();
-      buildTimeline(i);
-    };
-    mark.style.pointerEvents = 'auto';
-    mark.style.cursor = 'pointer';
-    container.appendChild(mark);
-  });
-}
 
 // ── Live mode ─────────────────────────────────────────────────────────
 let liveMode      = false;
@@ -2743,9 +2699,6 @@ async function loadGame() {
     plays    = (json.plays || []).filter(p => p.period?.number);
     playhead = plays.length - 1;
     document.getElementById('scrubber').max = Math.max(0, plays.length - 1);
-
-    // Scoring marks on scrubber
-    buildScoringMarks();
 
     // Quarter dividers on scrubber
     const qDivs = document.getElementById('qDivs');
