@@ -115,6 +115,18 @@ export async function fetchGameDetail(gameId) {
   return parseGameDetail(json);
 }
 
+export async function fetchGameTracker(gameId) {
+  const res = await fetch(`${ESPN_BASE}/summary?event=${gameId}`);
+  if (!res.ok) throw new Error('Tracker fetch failed');
+  const json = await res.json();
+
+  const comps = json.header?.competitions?.[0]?.competitors || [];
+  const homeTeamId = comps.find(c => c.homeAway === 'home')?.team?.id || null;
+
+  const allPlays = (json.plays || []).filter(p => p.period?.number);
+  return { allPlays, homeTeamId };
+}
+
 export async function fetchTeamStats(teamId) {
   const res = await fetch(`https://site.web.api.espn.com/apis/site/v2/sports/basketball/nba/teams/${teamId}/statistics`);
   if (!res.ok) throw new Error('Team stats fetch failed');

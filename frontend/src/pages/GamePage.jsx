@@ -399,6 +399,30 @@ function LiveChat({ gameId }) {
   );
 }
 
+/* ── 3D Game Tracker (iframe) ───────────────────────────── */
+function GameTracker({ gameId, inProgress }) {
+  const src = `/tracker.html?gameId=${gameId}`;
+  return (
+    <div className="section" style={{ marginBottom: '2rem' }}>
+      <div className="sub-label" style={{ marginBottom: 8 }}>
+        Game Tracker{inProgress && <span className="live-dot" style={{ marginLeft: 6 }} />}
+      </div>
+      <iframe
+        src={src}
+        style={{
+          width: '100%',
+          height: 520,
+          border: 'none',
+          borderRadius: 10,
+          display: 'block',
+        }}
+        allow="accelerometer"
+        title="Game Tracker 3D"
+      />
+    </div>
+  );
+}
+
 export default function GamePage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -600,6 +624,9 @@ export default function GamePage() {
                 </div>
               </div>
             </div>
+
+            {/* Game Tracker */}
+            <GameTracker gameId={gameId} inProgress={inProgress} />
 
             {/* Leaders */}
             {leaders.length > 0 && (
