@@ -1261,30 +1261,45 @@ buildStadiumShell();
   // Detach right-end panel from shared scrolling texture
   ledPanels[2].panel.material = mbarMat;
 
-  function drawMomentumBar(homeScore, awayScore) {
-    const total   = (homeScore + awayScore) || 2;
-    const homeFrac = homeScore / total;           // 0…1
-    const divX    = Math.round(homeFrac * MBAR_W);
+  // Initialize canvas to opaque black immediately (safe — no color vars needed)
+  mbarCtx.fillStyle = '#000';
+  mbarCtx.fillRect(0, 0, MBAR_W, MBAR_H);
+  mbarTex.needsUpdate = true;
 
-    mbarCtx.clearRect(0, 0, MBAR_W, MBAR_H);
+  function drawMomentumBar(homeScore, awayScore) {
     mbarCtx.fillStyle = '#000';
     mbarCtx.fillRect(0, 0, MBAR_W, MBAR_H);
 
+    const total = homeScore + awayScore;
+
+    // Pre-game (0-0): show a neutral centre line, no team colors
+    if (total === 0) {
+      mbarCtx.fillStyle = 'rgba(255,255,255,0.07)';
+      mbarCtx.fillRect(MBAR_W * 0.08, MBAR_H * 0.38, MBAR_W * 0.84, MBAR_H * 0.24);
+      mbarCtx.strokeStyle = 'rgba(255,255,255,0.12)';
+      mbarCtx.lineWidth = 1;
+      mbarCtx.strokeRect(MBAR_W * 0.08, MBAR_H * 0.38, MBAR_W * 0.84, MBAR_H * 0.24);
+      mbarTex.needsUpdate = true;
+      return;
+    }
+
+    const homeFrac = homeScore / total;           // 0…1
+    const divX    = Math.round(homeFrac * MBAR_W);
     const barY = MBAR_H * 0.32, barH = MBAR_H * 0.36;
 
     // Away fill (left → divider)
-    if (divX > 0) {
+    if (divX > 2) {
       const ag = mbarCtx.createLinearGradient(0, 0, divX, 0);
       ag.addColorStop(0, awayColorHex + '18');
-      ag.addColorStop(1, awayColorHex + 'cc');
+      ag.addColorStop(1, awayColorHex + 'bb');
       mbarCtx.fillStyle = ag;
       mbarCtx.fillRect(0, barY, divX, barH);
     }
 
     // Home fill (divider → right)
-    if (divX < MBAR_W) {
+    if (divX < MBAR_W - 2) {
       const hg = mbarCtx.createLinearGradient(divX, 0, MBAR_W, 0);
-      hg.addColorStop(0, homeColorHex + 'cc');
+      hg.addColorStop(0, homeColorHex + 'bb');
       hg.addColorStop(1, homeColorHex + '18');
       mbarCtx.fillStyle = hg;
       mbarCtx.fillRect(divX, barY, MBAR_W - divX, barH);
@@ -1316,7 +1331,6 @@ buildStadiumShell();
   }
 
   window._updateMomentumBar = drawMomentumBar;
-  // initial draw deferred — homeColorHex/awayColorHex not yet declared at this point
 }
 
 // Server rack cold-light silhouettes (background spatial depth)
