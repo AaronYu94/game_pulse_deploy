@@ -407,7 +407,7 @@ function GameTracker({ gameId, inProgress }) {
         src={src}
         style={{
           width: '100%',
-          height: 520,
+          height: 680,
           border: 'none',
           borderRadius: 10,
           display: 'block',
