@@ -1085,42 +1085,46 @@ buildStadiumShell();
   const ledCtx = ledCanvas.getContext('2d');
 
   function drawLEDText() {
-    // Solid black background
     ledCtx.fillStyle = '#000000';
     ledCtx.fillRect(0, 0, LED_TEX_W, LED_TEX_H);
-
-    ledCtx.font = '900 72px "JetBrains Mono", "Courier New", monospace';
     ledCtx.textBaseline = 'middle';
     ledCtx.textAlign = 'left';
 
-    const parts = [
-      { text: '[ STATUS: LIVE ]',  color: '#ff2222' },
-      { text: '     ',             color: null },
-      { text: 'GAME  PULSE',       color: '#ffffff' },
-      { text: '    //    ',        color: '#661111' },
-      { text: 'MOMENTUM  >>>',     color: '#ff2222' },
-      { text: '    //    ',        color: '#661111' },
-      { text: 'GAME  PAUSE',       color: '#ffffff' },
-      { text: '    //    ',        color: '#661111' },
-    ];
-
-    // Measure one full segment
-    let segW = 0;
-    for (const p of parts) segW += ledCtx.measureText(p.text).width;
-
-    // Tile across texture
-    const reps = Math.ceil(LED_TEX_W / segW) + 2;
-    for (let r = 0; r < reps; r++) {
-      let cx = r * segW;
-      for (const p of parts) {
-        const tw = ledCtx.measureText(p.text).width;
-        if (p.color) {
-          ledCtx.fillStyle = p.color;
-          ledCtx.fillText(p.text, cx, LED_TEX_H / 2);
+    // Helper: tile one row of segments across the full texture width
+    function tileRow(parts, yCenter, fontSize) {
+      ledCtx.font = `900 ${fontSize}px "JetBrains Mono","Courier New",monospace`;
+      let segW = 0;
+      for (const p of parts) segW += ledCtx.measureText(p.text).width;
+      const reps = Math.ceil(LED_TEX_W / segW) + 2;
+      for (let r = 0; r < reps; r++) {
+        let cx = r * segW;
+        for (const p of parts) {
+          const tw = ledCtx.measureText(p.text).width;
+          if (p.color) { ledCtx.fillStyle = p.color; ledCtx.fillText(p.text, cx, yCenter); }
+          cx += tw;
         }
-        cx += tw;
       }
     }
+
+    // Row 1 (upper third) — status / energy
+    tileRow([
+      { text: '[ STATUS: LIVE ]',         color: '#ff2222' },
+      { text: '                   ',      color: null },
+      { text: 'MOMENTUM  >>>',            color: '#cc1111' },
+      { text: '                   ',      color: null },
+      { text: '[ GAME  ON ]',             color: '#ff2222' },
+      { text: '                   ',      color: null },
+    ], LED_TEX_H * 0.27, 46);
+
+    // Row 2 (lower third) — branding / meta
+    tileRow([
+      { text: 'GAME  PULSE',              color: '#cccccc' },
+      { text: '         ///         ',    color: '#3a0000' },
+      { text: 'NBA  LIVE  TRACKER',       color: '#666666' },
+      { text: '         ///         ',    color: '#3a0000' },
+      { text: 'POWERED  BY  ESPN',        color: '#444444' },
+      { text: '         ///         ',    color: '#3a0000' },
+    ], LED_TEX_H * 0.73, 42);
   }
 
   drawLEDText();
@@ -1174,34 +1178,34 @@ buildStadiumShell();
   function addRibbon(x, y, z, w, h, nx, nz) {
     const rotY = Math.atan2(nx, nz);
 
-    // Housing: box frame behind panel
-    const hGeo = new THREE.BoxGeometry(w, h + 0.1, 0.15);
+    // Housing: deep recessed frame — "embedded screen" surround
+    const hGeo = new THREE.BoxGeometry(w, h + 0.4, 0.40);
     const housing = new THREE.Mesh(hGeo, housingMat);
     housing.position.set(x + nx * 0.08, y, z + nz * 0.08);
     housing.rotation.y = rotY;
     scene.add(housing);
 
-    // LED panel: PlaneGeometry facing the court
-    const pGeo = new THREE.PlaneGeometry(w - 0.2, h);
+    // LED panel: thin box with slight depth (not a flat plane)
+    const pGeo = new THREE.BoxGeometry(w - 0.2, h, 0.06);
     const panel = new THREE.Mesh(pGeo, ledRibbonMat);
     panel.position.set(x + nx * 0.35, y, z + nz * 0.35);
     panel.rotation.y = rotY;
     scene.add(panel);
 
-    // Glow light
-    const gl = new THREE.PointLight(0xff1100, 0.3, 12);
-    gl.position.set(x + nx * 2.5, y - 1.5, z + nz * 2.5);
+    // Stronger glow light for wider panel
+    const gl = new THREE.PointLight(0xff1100, 0.55, 20);
+    gl.position.set(x + nx * 2.5, y, z + nz * 2.5);
     scene.add(gl);
 
     ledPanels.push({ panel, gl });
   }
 
   // Far sideline — on row 1 front face, Y = 5.25
-  addRibbon(0, 5.25, -32.45, 114, 1.0, 0, 1);
+  addRibbon(0, 5.25, -32.45, 114, 3.5, 0, 1);
   // Left end
-  addRibbon(-54.5, 5.25, 0, 62, 1.0, 1, 0);
+  addRibbon(-54.5, 5.25, 0, 62, 3.5, 1, 0);
   // Right end
-  addRibbon(54.5, 5.25, 0, 62, 1.0, -1, 0);
+  addRibbon(54.5, 5.25, 0, 62, 3.5, -1, 0);
 
   // ── 4. Floor reflectivity boost ───────────────────────────────────
   floorMat.clearcoat = 0.4;
@@ -1209,7 +1213,7 @@ buildStadiumShell();
   floorMat.reflectivity = 0.3;
 
   // ── 5. Scroll animation ───────────────────────────────────────────
-  let ledSpeed = 0.002;
+  let ledSpeed = 0.0007;
   let ledPaused = false;
   let ledLastPause = false;
 
@@ -1244,7 +1248,7 @@ buildStadiumShell();
     ledFlashUntil = performance.now() + duration;
     drawLEDFlash(text, colorHex);
     ledScrollTex.needsUpdate = true;
-    ledSpeed = 0.007;
+    ledSpeed = 0.003;
   };
 
   window._updateLEDRibbons = function(now, dt) {
@@ -1252,14 +1256,14 @@ buildStadiumShell();
     if (paused !== ledLastPause) { ledLastPause = paused; ledPaused = paused; }
 
     if (now < ledFlashUntil) {
-      ledSpeed += (0.007 - ledSpeed) * 0.05;
+      ledSpeed += (0.003 - ledSpeed) * 0.05;
     } else {
       if (ledFlashUntil > 0) {
         ledFlashUntil = 0;
         drawLEDText();
         ledScrollTex.needsUpdate = true;
       }
-      const target = ledPaused ? 0.0004 : 0.002;
+      const target = ledPaused ? 0.00006 : 0.0007;
       ledSpeed += (target - ledSpeed) * 0.06;
     }
 
@@ -1846,6 +1850,74 @@ function buildCourtScanCloud() {
 
 const courtScanCloud = buildCourtScanCloud();
 
+// ── Tactical Chevrons: attack direction overlay on court floor ─────────
+const chevUniforms = {
+  uTime:  { value: 0.0 },
+  uColor: { value: new THREE.Color(0xff2211) },
+  uDir:   { value: 1.0 },  // 1=attack right (+X), -1=attack left (-X)
+};
+{
+  const chevMat = new THREE.ShaderMaterial({
+    uniforms: chevUniforms,
+    vertexShader: `
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform float uTime;
+      uniform vec3  uColor;
+      uniform float uDir;
+      varying vec2  vUv;
+      void main() {
+        // vUv.x: 0=left basket, 1=right basket (court length)
+        // vUv.y: 0=far sideline, 1=near sideline (court width)
+        float x = vUv.x, y = vUv.y - 0.5;
+
+        // 'along': 0 at centre line, 1 at enemy basket, negative on own half
+        float along = uDir > 0.0 ? (x - 0.5) * 2.0 : (0.5 - x) * 2.0;
+
+        // Only render in attacking half
+        float halfMask = smoothstep(0.0, 0.08, along);
+
+        // Chevron phase: along + |y| offset creates the ">" V shape
+        // Slow advance toward basket over time
+        float phase = fract(along * 4.5 + abs(y) * 2.8 - uTime * 0.28);
+        float stripe = 1.0 - smoothstep(0.0, 0.08, phase);
+
+        // Fade at width edges, stronger near basket, edge guard
+        float wFade  = 1.0 - smoothstep(0.28, 0.50, abs(y));
+        float dFade  = smoothstep(0.0, 0.12, along) * mix(0.3, 1.0, along * along);
+        float eFade  = smoothstep(0.0, 0.04, vUv.x)  * smoothstep(1.0, 0.96, vUv.x)
+                     * smoothstep(0.0, 0.04, vUv.y)  * smoothstep(1.0, 0.96, vUv.y);
+
+        float alpha = stripe * wFade * dFade * halfMask * eFade * 0.22;
+        gl_FragColor = vec4(uColor, alpha);
+      }
+    `,
+    transparent: true,
+    depthWrite:  false,
+    blending:    THREE.AdditiveBlending,
+  });
+
+  // Full-court horizontal plane just above floor
+  const chevGeo = new THREE.PlaneGeometry(94, 50);
+  const chevMesh = new THREE.Mesh(chevGeo, chevMat);
+  chevMesh.rotation.x = -Math.PI / 2;
+  chevMesh.position.set(0, 0.018, 0);
+  scene.add(chevMesh);
+}
+
+window._updateChevrons = function(teamId, period) {
+  if (!teamId || !homeTeamId) return;
+  const side = attackingSide(teamId, period);
+  const isHome = String(teamId) === String(homeTeamId);
+  chevUniforms.uDir.value   = side === 'right' ? 1.0 : -1.0;
+  chevUniforms.uColor.value.set(isHome ? homeColor : awayColor);
+};
+
 // ══════════════════════════════════════════════════════════════════════
 // ── CHRONOS: holographic clocks above each backboard ─────────────────
 // ══════════════════════════════════════════════════════════════════════
@@ -1930,6 +2002,9 @@ function updatePossession(play) {
   scanUniforms.uScanDir.value = side === 'right' ? 1.0 : -1.0;
   scanUniforms.uScanColor.value.set(col);
   scanUniforms.uScanActive.value = 1.0;
+
+  // Tactical chevrons follow attacking team
+  if (window._updateChevrons) window._updateChevrons(play.team.id, play.period?.number);
 
   // Pressure tracking: approximate ball position from play data
   if (play.coordinate && play.coordinate.x >= 0 && play.coordinate.y >= 0) {
@@ -2428,6 +2503,7 @@ function startRenderLoop() {
     updateCrowd(dt);
     updateBaskets(now / 1000);
     updateCourtScan(dt);
+    chevUniforms.uTime.value += dt;
 
     // Trail fade when not animating ball
     if (!ballMesh.visible && trailIdx > 0) {
