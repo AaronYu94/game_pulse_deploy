@@ -2517,7 +2517,8 @@ function makeTlItem(p, i, isActive) {
   div.dataset.idx = i;
   const [tag, tagCol] = getPlayTag(p);
   const shortText = (p.text || '—').slice(0, 50);
-  div.innerHTML = `${tag ? `<span class="tl-tag" style="color:${tagCol}">${tag}</span>` : ''}<span><span>${shortText}</span><span class="tl-clock">Q${p.period?.number || '?'} ${p.clock?.displayValue || ''}</span></span>`;
+  const wallTime = p.wallclock ? new Date(p.wallclock).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : `Q${p.period?.number || '?'} ${p.clock?.displayValue || ''}`;
+  div.innerHTML = `${tag ? `<span class="tl-tag" style="color:${tagCol}">${tag}</span>` : ''}<span><span>${shortText}</span><span class="tl-clock">${wallTime}</span></span>`;
   div.onclick = () => {
     stopPlay(); ballMesh.visible = false;
     playhead = i; renderFrame();
