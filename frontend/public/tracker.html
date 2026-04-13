@@ -7,11 +7,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --glass: rgba(8,12,28,0.62);
-    --glass-border: rgba(255,255,255,0.07);
+    --glass: rgba(22,4,4,0.65);
+    --glass-border: rgba(255,60,60,0.10);
     --glass-blur: 18px;
-    --accent: #5566ff;
-    --surface: rgba(14,18,36,0.85);
+    --accent: #dd2233;
+    --surface: rgba(24,4,4,0.88);
     --font-score: 'Orbitron', monospace;
     --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
     --font-ui: 'JetBrains Mono', system-ui, sans-serif;
@@ -21,9 +21,9 @@
     height: 100%; overflow: hidden;
   }
   body {
-    background: #060a18;
+    background: #080000;
     background-image:
-      radial-gradient(ellipse 120% 80% at 50% 40%, rgba(20,30,70,0.45) 0%, transparent 70%),
+      radial-gradient(ellipse 120% 80% at 50% 40%, rgba(90,10,10,0.50) 0%, transparent 70%),
       url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
     font-family: var(--font-ui);
     display: flex; flex-direction: column; align-items: center;
@@ -76,7 +76,7 @@
   /* ── Quarter scores strip ──────────────────────────── */
   .qtr-scores {
     display: flex; justify-content: center; gap: 12px; padding: 3px 14px;
-    background: rgba(6,10,24,0.8);
+    background: rgba(18,2,2,0.85);
     backdrop-filter: blur(10px);
     border-left: 1px solid var(--glass-border);
     border-right: 1px solid var(--glass-border);
@@ -177,7 +177,7 @@
   /* ── Vertical Event Timeline ───────────────────── */
   .event-timeline {
     width: 180px; flex-shrink: 0;
-    background: rgba(6,10,24,0.85);
+    background: rgba(18,2,2,0.88);
     backdrop-filter: blur(12px);
     border-left: 1px solid rgba(255,255,255,0.04);
     display: flex; flex-direction: column;
@@ -190,10 +190,10 @@
   }
   .tl-list {
     flex: 1; overflow-y: auto; padding: 4px 0;
-    scrollbar-width: thin; scrollbar-color: #1a1e30 transparent;
+    scrollbar-width: thin; scrollbar-color: #2a0808 transparent;
   }
   .tl-list::-webkit-scrollbar { width: 3px; }
-  .tl-list::-webkit-scrollbar-thumb { background: #1a1e30; border-radius: 2px; }
+  .tl-list::-webkit-scrollbar-thumb { background: #2a0808; border-radius: 2px; }
   .tl-item {
     padding: 8px 12px; font-size: 12px; color: #556;
     border-left: 2px solid transparent;
@@ -348,8 +348,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x060a18);          // deep navy
-scene.fog = new THREE.FogExp2(0x060a18, 0.004);
+scene.background = new THREE.Color(0x080000);
+scene.fog = new THREE.FogExp2(0x0a0000, 0.004);
 
 const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
 camera.position.set(0, 32, 68);
