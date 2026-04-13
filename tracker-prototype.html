@@ -27,74 +27,54 @@
   .tracker { width: 100%; max-width: 960px; }
 
   /* ── Glassmorphism scorebar ─────────────────────────── */
-  .scorebar {
-    display: flex; align-items: stretch;
-    background: var(--glass);
-    backdrop-filter: blur(var(--glass-blur));
+  /* ── Compact header bar ───────────────────────────── */
+  .header-bar {
+    display: flex; align-items: center;
+    background: var(--glass); backdrop-filter: blur(var(--glass-blur));
     -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--glass-border);
-    border-bottom: none;
-    border-radius: 12px 12px 0 0; overflow: hidden;
+    border: 1px solid var(--glass-border); border-bottom: none;
+    border-radius: 12px 12px 0 0; padding: 6px 14px; gap: 8px; overflow: hidden;
   }
-  .scorebar-team { flex: 1; display: flex; align-items: center; gap: 12px; padding: 16px 22px; }
-  .scorebar-team.away {
-    justify-content: flex-end;
-    background: radial-gradient(ellipse at 90% 50%, var(--c)20, transparent 70%);
-  }
-  .scorebar-team.home {
-    background: radial-gradient(ellipse at 10% 50%, var(--c)20, transparent 70%);
-  }
-  .team-bar { width: 3px; align-self: stretch; border-radius: 2px; background: var(--c); box-shadow: 0 0 8px var(--c); }
-  .team-abbr { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: #8899aa; letter-spacing: 2px; }
-  .team-score {
-    font-family: var(--font-score); font-size: 42px; font-weight: 900;
-    color: #fff; line-height: 1; font-variant-numeric: tabular-nums;
-    text-shadow: 0 0 18px rgba(255,255,255,0.15);
-  }
-  .scorebar-mid {
-    padding: 12px 18px; text-align: center; min-width: 100px;
-    display: flex; flex-direction: column; justify-content: center; gap: 2px;
-    border-left: 1px solid rgba(255,255,255,0.04);
-    border-right: 1px solid rgba(255,255,255,0.04);
-  }
-  .status-label {
-    font-family: var(--font-mono); font-size: 12px; font-weight: 700;
-    letter-spacing: 2px; display: flex; align-items: center; justify-content: center; gap: 4px;
-  }
-  .status-label.live { color: #ff3355; text-shadow: 0 0 10px rgba(255,51,85,0.5); }
-  .status-label.replay { color: #556677; }
-  .live-dot { width: 6px; height: 6px; border-radius: 50%; background: #ff3355; box-shadow: 0 0 6px #ff3355; animation: blink 1.2s infinite; flex-shrink: 0; }
+  .hb-team { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .hb-team.away { border-right: 1px solid rgba(255,255,255,0.05); padding-right: 12px; }
+  .hb-team.home { border-left: 1px solid rgba(255,255,255,0.05); padding-left: 12px; }
+  .hb-abbr { font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: #667; letter-spacing: 2px; }
+  .hb-score { font-family: var(--font-score); font-size: 26px; font-weight: 900; color: #fff; line-height: 1; font-variant-numeric: tabular-nums; }
+  .hb-center { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .hb-status { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: 2px; display: flex; align-items: center; gap: 4px; }
+  .hb-status.live { color: #ff3355; }
+  .hb-status.replay { color: #445; }
+  .live-dot { width: 5px; height: 5px; border-radius: 50%; background: #ff3355; box-shadow: 0 0 5px #ff3355; animation: blink 1.2s infinite; flex-shrink: 0; }
   @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.15} }
-  .qtr { font-family: var(--font-score); font-size: 18px; font-weight: 700; color: #dde; }
-  .clk { font-family: var(--font-mono); font-size: 13px; color: #445566; }
+  .hb-qtr { font-family: var(--font-score); font-size: 13px; font-weight: 700; color: #aab; }
+  .hb-clk { font-family: var(--font-mono); font-size: 11px; color: #445; }
+  .hb-qtrs { display: flex; gap: 6px; align-items: center; font-family: var(--font-mono); font-size: 10px; color: #334; font-variant-numeric: tabular-nums; }
 
-  /* ── Quarter scores strip ──────────────────────────── */
-  .qtr-scores {
-    display: flex; justify-content: center; gap: 12px; padding: 3px 14px;
-    background: rgba(10,10,10,0.85);
-    backdrop-filter: blur(10px);
+  /* ── Horizontal play-by-play strip ────────────────── */
+  .plays-strip {
+    display: flex; align-items: stretch;
+    background: rgba(6,6,6,0.95);
     border-left: 1px solid var(--glass-border);
     border-right: 1px solid var(--glass-border);
-    font-family: var(--font-mono); font-size: 12px; color: #334;
-    font-variant-numeric: tabular-nums;
+    min-height: 30px; overflow: hidden;
   }
-
-  /* ── Ticker ────────────────────────────────────────── */
-  .ticker {
-    background: rgba(6,10,20,0.75);
-    backdrop-filter: blur(12px);
-    border-left: 1px solid var(--glass-border); border-right: 1px solid var(--glass-border);
-    padding: 7px 14px; font-size: 12px; color: #445; min-height: 30px;
-    display: flex; align-items: center;
-    border-left: 3px solid transparent;
-    transition: border-color .3s ease, color .3s ease, text-shadow .3s ease;
+  .tl-item {
+    flex: 1; display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px; font-size: 10px; color: #3a3a3a;
+    border-right: 1px solid rgba(255,255,255,0.03);
+    overflow: hidden; line-height: 1.3; min-width: 0;
   }
-  .ticker.scoring { color: #ccd; text-shadow: 0 0 6px rgba(255,255,255,0.1); }
+  .tl-item:last-child { border-right: none; }
+  .tl-item.active { color: #778; background: rgba(255,255,255,0.025); }
+  .tl-item.scoring-play { border-top: 1px solid var(--team-color, #333); }
+  .tl-tag { font-size: 9px; font-weight: 700; flex-shrink: 0; opacity: 0.9; }
+  .tl-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+  .tl-clock { font-family: var(--font-mono); font-size: 9px; color: #333; flex-shrink: 0; margin-left: 4px; }
 
-  /* ── Court ─────────────────────────────────────────── */
+  /* ── Court (full width) ────────────────────────────── */
   .court-wrap {
     border-left: 1px solid var(--glass-border); border-right: 1px solid var(--glass-border);
-    background: #020408; line-height: 0; position: relative;
+    background: #000; line-height: 0; position: relative;
   }
   #threeCanvas { display: block; width: 100% !important; }
 
@@ -150,61 +130,6 @@
   .legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: #445; flex-wrap: wrap; align-items: center; }
   .ld { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 3px; vertical-align: middle; }
 
-  /* ── Court + Timeline side by side ─────────────── */
-  .court-timeline-row {
-    display: flex;
-    border-left: 1px solid var(--glass-border);
-    border-right: 1px solid var(--glass-border);
-  }
-  .court-timeline-row .court-wrap {
-    flex: 1; min-width: 0;
-    border-left: none; border-right: none;
-  }
-
-  /* ── Vertical Event Timeline ───────────────────── */
-  .event-timeline {
-    width: 180px; flex-shrink: 0;
-    background: rgba(10,10,10,0.88);
-    backdrop-filter: blur(12px);
-    border-left: 1px solid rgba(255,255,255,0.04);
-    display: flex; flex-direction: column;
-    overflow: hidden;
-  }
-  .tl-header {
-    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-    letter-spacing: 2px; color: #445; padding: 8px 12px;
-    border-bottom: 1px solid rgba(255,255,255,0.04);
-  }
-  .tl-list {
-    flex: 1; overflow-y: auto; padding: 4px 0;
-    scrollbar-width: thin; scrollbar-color: #2a0808 transparent;
-  }
-  .tl-list::-webkit-scrollbar { width: 3px; }
-  .tl-list::-webkit-scrollbar-thumb { background: #2a0808; border-radius: 2px; }
-  .tl-item {
-    padding: 8px 12px; font-size: 12px; color: #556;
-    border-left: 2px solid transparent;
-    transition: all .25s ease;
-    display: flex; align-items: flex-start; gap: 8px;
-    line-height: 1.4;
-  }
-  .tl-item.active {
-    background: rgba(255,255,255,0.03);
-    color: #aab;
-  }
-  .tl-item.scoring-play {
-    color: #ccd;
-    border-left-color: var(--team-color, #556);
-  }
-  .tl-tag {
-    flex-shrink: 0; width: 28px; text-align: center;
-    font-family: var(--font-mono); font-size: 10px; font-weight: 700;
-    letter-spacing: 0.5px; opacity: 0.85;
-  }
-  .tl-clock {
-    font-family: var(--font-mono); font-size: 10px; color: #445;
-    display: block; margin-top: 2px;
-  }
 
 /* ── Camera preset buttons ─────────────────────── */
   .cam-btn { font-size: 10px !important; letter-spacing: 1px; }
@@ -213,39 +138,26 @@
 <body>
 <div class="tracker">
 
-  <div class="scorebar">
-    <div class="scorebar-team away" id="awayTeam" style="--c:#1d428a">
-      <div style="text-align:right">
-        <div class="team-abbr" id="awayAbbr">AWAY</div>
-        <div class="team-score" id="awayScore">0</div>
-      </div>
-      <div class="team-bar"></div>
+  <div class="header-bar">
+    <div class="hb-team away" id="awayTeam" style="--c:#1d428a">
+      <div class="hb-abbr" id="awayAbbr">AWAY</div>
+      <div class="hb-score" id="awayScore">0</div>
     </div>
-    <div class="scorebar-mid">
-      <div class="status-label replay" id="statusLabel">REPLAY</div>
-      <div class="qtr" id="qtrLabel">Q1</div>
-      <div class="clk" id="clkLabel">12:00</div>
-      <div class="clk" id="wallLabel" style="color:#333;font-size:10px;margin-top:1px"></div>
+    <div class="hb-center">
+      <div class="hb-status replay" id="statusLabel">REPLAY</div>
+      <div class="hb-qtr" id="qtrLabel">Q1</div>
+      <div class="hb-clk" id="clkLabel">12:00</div>
+      <div class="hb-qtrs" id="qtrScores"></div>
     </div>
-    <div class="scorebar-team home" id="homeTeam" style="--c:#c8102e">
-      <div class="team-bar"></div>
-      <div>
-        <div class="team-abbr" id="homeAbbr">HOME</div>
-        <div class="team-score" id="homeScore">0</div>
-      </div>
+    <div class="hb-team home" id="homeTeam" style="--c:#c8102e">
+      <div class="hb-score" id="homeScore">0</div>
+      <div class="hb-abbr" id="homeAbbr">HOME</div>
     </div>
   </div>
 
-  <div class="qtr-scores" id="qtrScores"></div>
+  <div class="plays-strip" id="tlList"></div>
 
-  <!-- Court + Event Timeline side by side -->
-  <div class="court-timeline-row">
-    <div class="court-wrap"><canvas id="threeCanvas"></canvas></div>
-    <div class="event-timeline" id="eventTimeline">
-      <div class="tl-header">PLAY-BY-PLAY</div>
-      <div class="tl-list" id="tlList"></div>
-    </div>
-  </div>
+  <div class="court-wrap"><canvas id="threeCanvas"></canvas></div>
 
   <div class="controls">
     <div class="q-labels"><span>Q1</span><span>Q2</span><span>Q3</span><span>Q4</span></div>
@@ -2315,7 +2227,6 @@ function updateUI(h) {
   document.getElementById('homeScore').textContent = p.homeScore ?? 0;
   document.getElementById('qtrLabel').textContent  = `Q${p.period?.number ?? 1}`;
   document.getElementById('clkLabel').textContent  = p.clock?.displayValue ?? '';
-  document.getElementById('wallLabel').textContent = formatWallclock(p.wallclock);
 
   // Quarter scores bar
   const qtrs = computeQtrScores(h);
@@ -2490,8 +2401,8 @@ document.querySelectorAll('.cam-btn').forEach(b => {
   };
 });
 
-// ── Event timeline (vertical play-by-play) ────────────────────────────
-const MAX_TL_ITEMS = 3;
+// ── Horizontal play-by-play strip ─────────────────────────────────────
+const MAX_TL_ITEMS = 4;
 const tlList = document.getElementById('tlList');
 let lastTlHead = -1;  // track what we last built to avoid full rebuild
 
@@ -2519,7 +2430,7 @@ function makeTlItem(p, i, isActive) {
   const [tag, tagCol] = getPlayTag(p);
   const shortText = (p.text || '—').slice(0, 50);
   const wallTime = p.wallclock ? new Date(p.wallclock).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }) : `Q${p.period?.number || '?'} ${p.clock?.displayValue || ''}`;
-  div.innerHTML = `${tag ? `<span class="tl-tag" style="color:${tagCol}">${tag}</span>` : ''}<span><span>${shortText}</span><span class="tl-clock">${wallTime}</span></span>`;
+  div.innerHTML = `${tag ? `<span class="tl-tag" style="color:${tagCol}">${tag}</span>` : ''}<span class="tl-text">${shortText}</span><span class="tl-clock">${wallTime}</span>`;
   div.onclick = () => {
     stopPlay(); ballMesh.visible = false;
     playhead = i; renderFrame();
@@ -2549,7 +2460,6 @@ function buildTimeline(upToHead) {
     while (tlList.children.length > MAX_TL_ITEMS) tlList.removeChild(tlList.firstChild);
   }
   lastTlHead = upToHead;
-  tlList.scrollTop = tlList.scrollHeight;
 }
 
 
@@ -2597,9 +2507,9 @@ async function pollLive() {
     const el   = document.getElementById('statusLabel');
     if (st?.state === 'in') {
       el.innerHTML = '<span class="live-dot"></span>LIVE';
-      el.className = 'status-label live';
+      el.className = 'hb-status live';
     } else if (st?.completed) {
-      el.textContent = 'FINAL'; el.className = 'status-label replay';
+      el.textContent = 'FINAL'; el.className = 'hb-status replay';
       // Game over — stop polling
       stopLive();
     }
@@ -2689,10 +2599,10 @@ async function loadGame() {
     const el = document.getElementById('statusLabel');
     if (st?.state === 'in') {
       el.innerHTML = '<span class="live-dot"></span>LIVE';
-      el.className = 'status-label live';
+      el.className = 'hb-status live';
     } else {
       el.textContent = st?.completed ? 'FINAL' : 'REPLAY';
-      el.className = 'status-label replay';
+      el.className = 'hb-status replay';
     }
 
     plays    = (json.plays || []).filter(p => p.period?.number);
