@@ -19,9 +19,9 @@
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body { height: 100%; overflow: hidden; }
   body {
-    background: #080000;
+    background: #000;
     background-image:
-      radial-gradient(ellipse 120% 80% at 50% 40%, rgba(90,10,10,0.50) 0%, transparent 70%),
+      radial-gradient(ellipse 120% 80% at 50% 40%, rgba(90,10,10,0.35) 0%, transparent 70%),
       url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
     font-family: var(--font-ui);
     display: flex; flex-direction: column; align-items: center;
@@ -138,24 +138,24 @@
   .btn-row { display: flex; align-items: center; gap: 5px; }
   .btn {
     font-family: var(--font-mono);
-    padding: 7px 14px; border: 1px solid rgba(50,60,90,0.5); border-radius: 6px;
-    background: rgba(20,25,45,0.6); color: #556; font-size: 13px;
+    padding: 7px 14px; border: 1px solid rgba(100,20,20,0.5); border-radius: 6px;
+    background: rgba(40,6,6,0.7); color: #885; font-size: 13px;
     cursor: pointer;
     transition: all .2s ease;
     transform: scale(1);
   }
-  .btn:hover { border-color: rgba(100,120,180,0.4); color: #99a; transform: scale(1.04); }
+  .btn:hover { border-color: rgba(180,40,40,0.5); color: #bb8; transform: scale(1.04); }
   .btn:active { transform: scale(0.96); }
   .btn.active {
-    background: linear-gradient(135deg, var(--accent), #4455dd);
-    border-color: var(--accent); color: #fff;
-    box-shadow: 0 0 10px rgba(85,102,255,0.3);
+    background: linear-gradient(135deg, #aa1122, #6b0010);
+    border-color: #cc2233; color: #fff;
+    box-shadow: 0 0 10px rgba(180,20,40,0.4);
   }
   .btn.play-btn { min-width: 80px; font-weight: 700; }
   .btn.play-btn.playing {
-    background: linear-gradient(135deg, var(--accent), #4455dd);
-    border-color: var(--accent); color: #fff;
-    box-shadow: 0 0 12px rgba(85,102,255,0.35);
+    background: linear-gradient(135deg, #cc1122, #7a0010);
+    border-color: #cc2233; color: #fff;
+    box-shadow: 0 0 12px rgba(180,20,40,0.4);
   }
   .count { margin-left: auto; font-family: var(--font-mono); font-size: 13px; color: #334; }
   .legend { display: flex; gap: 12px; margin-top: 10px; font-size: 11px; color: #445; flex-wrap: wrap; align-items: center; }
@@ -292,7 +292,6 @@
         <button class="btn cam-btn active" data-cam="tv">TV</button>
         <button class="btn cam-btn" data-cam="top">TOP</button>
         <button class="btn cam-btn" data-cam="base">BASE</button>
-        <button class="btn cam-btn" data-cam="free">FREE</button>
       </div>
       <span class="count" id="count">0 / 0</span>
       <button class="btn" id="btnLive" style="margin-left:8px;border-color:rgba(255,50,80,0.4);color:#ff3355">⬤ LIVE</button>
@@ -350,8 +349,8 @@ scene.background = new THREE.Color(0x080000);
 scene.fog = new THREE.FogExp2(0x0a0000, 0.004);
 
 const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
-camera.position.set(0, 32, 68);
-camera.lookAt(0, 1, -2);
+camera.position.set(0, 52, 72);
+camera.lookAt(0, 0, -4);
 
 // ── Post-processing: Bloom ───────────────────────────────────────────
 const composer = new EffectComposer(renderer);
@@ -2426,7 +2425,7 @@ document.querySelectorAll('[data-speed]').forEach(b => b.onclick = () => setSpee
 
 // ── Camera presets (smooth transition) ────────────────────────────────
 const CAM_PRESETS = {
-  tv:   { pos: [0, 32, 68],  look: [0, 1, -2]  },
+  tv:   { pos: [0, 52, 72],  look: [0, 0, -4]  },
   top:  { pos: [0, 72, 8],   look: [0, 0, 0]   },
   base: { pos: [-62, 16, 6], look: [0, 8, 0]   },
 };
