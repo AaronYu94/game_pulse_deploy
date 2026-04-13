@@ -2711,11 +2711,7 @@ async function loadGame() {
       }
     });
 
-    document.getElementById('legend').innerHTML = `
-      <span><span class="ld" style="background:${awayColorHex}"></span>${awayAbbr} made</span>
-      <span><span class="ld" style="background:none;border:1.5px solid ${awayColorHex};border-radius:50%"></span>miss</span>
-      <span style="margin-left:6px"><span class="ld" style="background:${homeColorHex}"></span>${homeAbbr} made</span>
-      <span><span class="ld" style="background:none;border:1.5px solid ${homeColorHex};border-radius:50%"></span>miss</span>
+    document.getElementById('legend').innerHTML = ``;
     `;
 
     renderFrame();
