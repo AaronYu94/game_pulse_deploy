@@ -2580,8 +2580,6 @@ async function loadGame() {
     document.getElementById('awayAbbr').textContent = awayAbbr;
     document.getElementById('homeTeam').style.setProperty('--c', homeColorHex);
     document.getElementById('awayTeam').style.setProperty('--c', awayColorHex);
-    document.querySelector('#homeTeam .team-bar').style.background = homeColorHex;
-    document.querySelector('#awayTeam .team-bar').style.background = awayColorHex;
 
     const st = json.header?.competitions?.[0]?.status?.type;
     const el = document.getElementById('statusLabel');
