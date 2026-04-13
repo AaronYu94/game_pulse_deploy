@@ -1250,87 +1250,6 @@ buildStadiumShell();
     if (ledScrollTex.offset.x > 1) ledScrollTex.offset.x -= 1;
   };
 
-  // ── Momentum bar: right-end panel gets its own score-diff energy bar ──
-  const MBAR_W = 512, MBAR_H = 128;
-  const mbarCanvas = document.createElement('canvas');
-  mbarCanvas.width = MBAR_W; mbarCanvas.height = MBAR_H;
-  const mbarCtx = mbarCanvas.getContext('2d');
-  const mbarTex = new THREE.CanvasTexture(mbarCanvas);
-  mbarTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  const mbarMat = new THREE.MeshBasicMaterial({ map: mbarTex, toneMapped: false });
-  // Detach right-end panel from shared scrolling texture
-  ledPanels[2].panel.material = mbarMat;
-
-  // Initialize canvas to opaque black immediately (safe — no color vars needed)
-  mbarCtx.fillStyle = '#000';
-  mbarCtx.fillRect(0, 0, MBAR_W, MBAR_H);
-  mbarTex.needsUpdate = true;
-
-  function drawMomentumBar(homeScore, awayScore) {
-    mbarCtx.fillStyle = '#000';
-    mbarCtx.fillRect(0, 0, MBAR_W, MBAR_H);
-
-    const total = homeScore + awayScore;
-
-    // Pre-game (0-0): show a neutral centre line, no team colors
-    if (total === 0) {
-      mbarCtx.fillStyle = 'rgba(255,255,255,0.07)';
-      mbarCtx.fillRect(MBAR_W * 0.08, MBAR_H * 0.38, MBAR_W * 0.84, MBAR_H * 0.24);
-      mbarCtx.strokeStyle = 'rgba(255,255,255,0.12)';
-      mbarCtx.lineWidth = 1;
-      mbarCtx.strokeRect(MBAR_W * 0.08, MBAR_H * 0.38, MBAR_W * 0.84, MBAR_H * 0.24);
-      mbarTex.needsUpdate = true;
-      return;
-    }
-
-    const homeFrac = homeScore / total;           // 0…1
-    const divX    = Math.round(homeFrac * MBAR_W);
-    const barY = MBAR_H * 0.32, barH = MBAR_H * 0.36;
-
-    // Away fill (left → divider)
-    if (divX > 2) {
-      const ag = mbarCtx.createLinearGradient(0, 0, divX, 0);
-      ag.addColorStop(0, awayColorHex + '18');
-      ag.addColorStop(1, awayColorHex + 'bb');
-      mbarCtx.fillStyle = ag;
-      mbarCtx.fillRect(0, barY, divX, barH);
-    }
-
-    // Home fill (divider → right)
-    if (divX < MBAR_W - 2) {
-      const hg = mbarCtx.createLinearGradient(divX, 0, MBAR_W, 0);
-      hg.addColorStop(0, homeColorHex + 'bb');
-      hg.addColorStop(1, homeColorHex + '18');
-      mbarCtx.fillStyle = hg;
-      mbarCtx.fillRect(divX, barY, MBAR_W - divX, barH);
-    }
-
-    // Centre divider tick
-    mbarCtx.strokeStyle = 'rgba(255,255,255,0.35)';
-    mbarCtx.lineWidth = 2;
-    mbarCtx.beginPath();
-    mbarCtx.moveTo(divX, MBAR_H * 0.18);
-    mbarCtx.lineTo(divX, MBAR_H * 0.82);
-    mbarCtx.stroke();
-
-    // Score labels
-    mbarCtx.font = '900 38px "JetBrains Mono","Courier New",monospace';
-    mbarCtx.textBaseline = 'middle';
-    mbarCtx.shadowBlur = 8;
-    mbarCtx.textAlign = 'left';
-    mbarCtx.shadowColor = awayColorHex;
-    mbarCtx.fillStyle  = awayColorHex;
-    mbarCtx.fillText(awayAbbr + ' ' + awayScore, 10, MBAR_H / 2);
-    mbarCtx.textAlign = 'right';
-    mbarCtx.shadowColor = homeColorHex;
-    mbarCtx.fillStyle  = homeColorHex;
-    mbarCtx.fillText(homeScore + ' ' + homeAbbr, MBAR_W - 10, MBAR_H / 2);
-    mbarCtx.shadowBlur = 0;
-
-    mbarTex.needsUpdate = true;
-  }
-
-  window._updateMomentumBar = drawMomentumBar;
 }
 
 // Server rack cold-light silhouettes (background spatial depth)
@@ -2620,9 +2539,6 @@ function updateUI(h) {
   const isClutch = diff <= 5 && clkSec <= 120 && qNum >= 4;
   setClutchMode(isClutch);
   updateChronos(clkStr, isClutch || clkSec <= 24);
-
-  // Momentum bar: live score-diff energy strip on right-end ribbon
-  if (window._updateMomentumBar) window._updateMomentumBar(p.homeScore || 0, p.awayScore || 0);
 
   // Quarter scores bar
   const qtrs = computeQtrScores(h);
