@@ -5385,7 +5385,7 @@ body.news-page-body { overflow: auto; height: auto; }
 .live-chat {
   display: flex;
   flex-direction: column;
-  height: 340px;
+  background: #000;
   border-top: 1px solid var(--border);
   margin-top: 4px;
 }
@@ -5401,14 +5401,10 @@ body.news-page-body { overflow: auto; height: auto; }
   flex-shrink: 0;
 }
 .live-chat__messages {
-  flex: 1;
-  overflow-y: auto;
   padding: 8px 10px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  scrollbar-width: thin;
-  scrollbar-color: var(--border) transparent;
 }
 .live-chat__empty {
   color: var(--text-muted);
@@ -5461,11 +5457,12 @@ body.news-page-body { overflow: auto; height: auto; }
   gap: 6px;
   padding: 8px 10px;
   border-top: 1px solid var(--border);
+  background: #000;
   flex-shrink: 0;
 }
 .live-chat__input {
   flex: 1;
-  background: var(--bg-surface);
+  background: #111;
   border: 1px solid var(--border);
   color: var(--text);
   font-size: 0.78rem;

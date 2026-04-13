@@ -314,20 +314,22 @@ function BoxscoreTable({ team, playerRatings, onRatePlayer, canRate, onRequireAu
   );
 }
 
+function formatChatTime(dateStr) {
+  if (!dateStr) return '';
+  return new Date(dateStr).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+}
+
 function LiveChat({ gameId }) {
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const socketRef = useRef(null);
-  const bottomRef = useRef(null);
 
   useEffect(() => {
     if (!gameId) return;
 
-    // Load history
     apiGetChat(gameId).then(setMessages).catch(() => {});
 
-    // Connect socket
     const token = localStorage.getItem('score_token');
     const socket = io({ auth: { token }, transports: ['websocket', 'polling'] });
     socketRef.current = socket;
@@ -344,11 +346,6 @@ function LiveChat({ gameId }) {
       socket.disconnect();
     };
   }, [gameId]);
-
-  // Auto-scroll to bottom on new messages
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   async function handleSend(e) {
     e.preventDefault();
@@ -377,11 +374,10 @@ function LiveChat({ gameId }) {
               </span>
               {m.title_name && <span className="chat-msg__title-name">{m.title_name}</span>}
               <span className="chat-msg__text">{m.content}</span>
-              <span className="chat-msg__time">{timeAgo(m.created_at)}</span>
+              <span className="chat-msg__time">{formatChatTime(m.created_at)}</span>
             </div>
           ))
         )}
-        <div ref={bottomRef} />
       </div>
       <form className="live-chat__form" onSubmit={handleSend}>
         <input
