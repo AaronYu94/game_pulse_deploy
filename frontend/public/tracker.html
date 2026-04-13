@@ -7,11 +7,11 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
 <style>
   :root {
-    --glass: rgba(22,4,4,0.65);
-    --glass-border: rgba(255,60,60,0.10);
+    --glass: rgba(10,10,10,0.75);
+    --glass-border: rgba(255,255,255,0.07);
     --glass-blur: 18px;
     --accent: #dd2233;
-    --surface: rgba(24,4,4,0.88);
+    --surface: rgba(12,12,12,0.90);
     --font-score: 'Orbitron', monospace;
     --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
     --font-ui: 'JetBrains Mono', system-ui, sans-serif;
@@ -22,9 +22,6 @@
   }
   body {
     background: #000;
-    background-image:
-      radial-gradient(ellipse 120% 80% at 50% 40%, rgba(90,10,10,0.35) 0%, transparent 70%),
-      url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
     font-family: var(--font-ui);
     display: flex; flex-direction: column; align-items: center;
     padding: 8px 16px;
@@ -76,7 +73,7 @@
   /* ── Quarter scores strip ──────────────────────────── */
   .qtr-scores {
     display: flex; justify-content: center; gap: 12px; padding: 3px 14px;
-    background: rgba(18,2,2,0.85);
+    background: rgba(10,10,10,0.85);
     backdrop-filter: blur(10px);
     border-left: 1px solid var(--glass-border);
     border-right: 1px solid var(--glass-border);
@@ -177,7 +174,7 @@
   /* ── Vertical Event Timeline ───────────────────── */
   .event-timeline {
     width: 180px; flex-shrink: 0;
-    background: rgba(18,2,2,0.88);
+    background: rgba(10,10,10,0.88);
     backdrop-filter: blur(12px);
     border-left: 1px solid rgba(255,255,255,0.04);
     display: flex; flex-direction: column;
@@ -347,8 +344,8 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x080000);
-scene.fog = new THREE.FogExp2(0x0a0000, 0.004);
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.FogExp2(0x000000, 0.004);
 
 const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
 camera.position.set(0, 52, 72);
