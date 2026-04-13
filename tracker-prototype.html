@@ -1213,15 +1213,55 @@ buildStadiumShell();
   let ledPaused = false;
   let ledLastPause = false;
 
+  // ── LED Flash: override ribbon with scoring event text ───────────────
+  let ledFlashUntil = 0;
+
+  function drawLEDFlash(text, colorHex) {
+    ledCtx.fillStyle = '#000';
+    ledCtx.fillRect(0, 0, LED_TEX_W, LED_TEX_H);
+    ledCtx.font = '900 76px "JetBrains Mono","Courier New",monospace';
+    ledCtx.textBaseline = 'middle'; ledCtx.textAlign = 'left';
+    const sep = '   ///   ';
+    const sepW = ledCtx.measureText(sep).width;
+    const tw   = ledCtx.measureText(text).width;
+    const unit = tw + sepW;
+    const reps = Math.ceil(LED_TEX_W / unit) + 2;
+    let cx = 0;
+    for (let r = 0; r < reps; r++) {
+      ledCtx.shadowColor = colorHex; ledCtx.shadowBlur = 18;
+      ledCtx.fillStyle = colorHex;
+      ledCtx.fillText(text, cx, LED_TEX_H / 2);
+      ledCtx.shadowBlur = 0;
+      ledCtx.fillStyle = '#550000';
+      ledCtx.fillText(sep, cx + tw, LED_TEX_H / 2);
+      cx += unit;
+    }
+  }
+
+  window._ledFlash = function(text, colorHex, duration) {
+    colorHex  = colorHex  || '#ff2222';
+    duration  = duration  || 7000;
+    ledFlashUntil = performance.now() + duration;
+    drawLEDFlash(text, colorHex);
+    ledScrollTex.needsUpdate = true;
+    ledSpeed = 0.007;
+  };
+
   window._updateLEDRibbons = function(now, dt) {
     const paused = !isPlaying && !liveMode;
-    if (paused !== ledLastPause) {
-      ledLastPause = paused;
-      ledPaused = paused;
-    }
+    if (paused !== ledLastPause) { ledLastPause = paused; ledPaused = paused; }
 
-    const target = ledPaused ? 0.0004 : 0.002;
-    ledSpeed += (target - ledSpeed) * 0.06;
+    if (now < ledFlashUntil) {
+      ledSpeed += (0.007 - ledSpeed) * 0.05;
+    } else {
+      if (ledFlashUntil > 0) {
+        ledFlashUntil = 0;
+        drawLEDText();
+        ledScrollTex.needsUpdate = true;
+      }
+      const target = ledPaused ? 0.0004 : 0.002;
+      ledSpeed += (target - ledSpeed) * 0.06;
+    }
 
     ledScrollTex.offset.x += ledSpeed;
     if (ledScrollTex.offset.x > 1) ledScrollTex.offset.x -= 1;
@@ -1805,6 +1845,67 @@ function buildCourtScanCloud() {
 
 const courtScanCloud = buildCourtScanCloud();
 
+// ══════════════════════════════════════════════════════════════════════
+// ── CHRONOS: holographic clocks above each backboard ─────────────────
+// ══════════════════════════════════════════════════════════════════════
+function makeChronosSprite(worldX) {
+  const tc = document.createElement('canvas');
+  tc.width = 256; tc.height = 64;
+  const tctx = tc.getContext('2d');
+  const tex = new THREE.CanvasTexture(tc);
+  const mat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(9, 2.25, 1);
+  sprite.position.set(worldX, RIM_H + 5.2, 0);
+  scene.add(sprite);
+  return { sprite, tc, tctx, tex, mat };
+}
+const chronosL = makeChronosSprite(-RIM_X);
+const chronosR = makeChronosSprite( RIM_X);
+
+function updateChronos(clockStr, isClutch) {
+  for (const { tctx, tc, tex, mat } of [chronosL, chronosR]) {
+    tctx.clearRect(0, 0, tc.width, tc.height);
+    const col = isClutch ? '#ff3333' : '#224444';
+    tctx.font = '700 34px "JetBrains Mono","Courier New",monospace';
+    tctx.textBaseline = 'middle'; tctx.textAlign = 'center';
+    tctx.shadowColor = col; tctx.shadowBlur = isClutch ? 20 : 8;
+    tctx.fillStyle = col;
+    tctx.fillText(clockStr, tc.width / 2, tc.height / 2);
+    tex.needsUpdate = true;
+    mat.opacity = isClutch ? (0.55 + 0.3 * Math.sin(performance.now() * 0.008)) : 0.35;
+  }
+}
+
+// ── CLUTCH MODE ───────────────────────────────────────────────────────
+let clutchActive = false;
+function parseClockSec(s) {
+  if (!s) return 999;
+  const p = s.split(':');
+  return p.length === 2 ? +p[0] * 60 + +p[1] : 999;
+}
+function setClutchMode(on) {
+  if (on === clutchActive) return;
+  clutchActive = on;
+  if (on) {
+    bloomPass.strength = 0.75;
+    bloomPass.threshold = 0.3;
+    ambLight.color.set(0x551111);
+    ambLight.intensity = 3.8;
+    scene.fog.color.set(0x110000);
+    scanUniforms.uScanColor.value.set(0xff1111);
+  } else {
+    bloomPass.strength = 0.35;
+    bloomPass.threshold = 0.45;
+    ambLight.color.set(0x2a2a55);
+    ambLight.intensity = 2.5;
+    scene.fog.color.set(0x000000);
+  }
+}
+
 // ── Court scan update (called from render loop) ──────────────────────
 function updateCourtScan(dt) {
   scanUniforms.uTime.value += dt;
@@ -1961,6 +2062,76 @@ function showImpactRipple3D(worldX, worldZ, colorNum) {
   }
 }
 
+// ── Holographic typewriter popup ─────────────────────────────────────
+function showHologramPopup(text, wx, wy, wz, colorHex) {
+  const W2 = 512, H2 = 72;
+  const tc = document.createElement('canvas');
+  tc.width = W2; tc.height = H2;
+  const tctx = tc.getContext('2d');
+  const tex = new THREE.CanvasTexture(tc);
+  const mat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(14, 2, 1);
+  sprite.position.set(wx, wy, wz);
+  scene.add(sprite);
+
+  let charIdx = 0;
+  const CHAR_MS  = 48, HOLD_MS = 2200, FADE_MS = 700;
+  const t0 = performance.now();
+
+  function tick(now) {
+    const elapsed = now - t0;
+    charIdx = Math.min(text.length, Math.floor(elapsed / CHAR_MS));
+    const shown = text.slice(0, charIdx) + (charIdx < text.length ? '▌' : '');
+
+    tctx.clearRect(0, 0, W2, H2);
+    tctx.font = '700 32px "JetBrains Mono","Courier New",monospace';
+    tctx.textBaseline = 'middle'; tctx.textAlign = 'left';
+    tctx.shadowColor = colorHex; tctx.shadowBlur = 14;
+    tctx.fillStyle = colorHex;
+    tctx.fillText(shown, 12, H2 / 2);
+    tex.needsUpdate = true;
+
+    const holdStart = text.length * CHAR_MS;
+    const fadeStart = holdStart + HOLD_MS;
+    const totalDur  = fadeStart + FADE_MS;
+    if (elapsed > totalDur) { scene.remove(sprite); mat.dispose(); tex.dispose(); return; }
+    mat.opacity = elapsed > fadeStart ? 1 - (elapsed - fadeStart) / FADE_MS : 1;
+    sprite.position.y += 0.006;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+
+// ── Player name extraction ────────────────────────────────────────────
+function extractPlayerName(text) {
+  const m = (text || '').match(/^([A-Z][a-zA-Z'\.\-]+(?: [A-Z][a-zA-Z'\.\-]+)+)/);
+  return m ? m[1].toUpperCase() : '';
+}
+
+// ── Momentum streak tracker ───────────────────────────────────────────
+let momStreak = { teamId: null, count: 0 };
+function updateMomentumStreak(play) {
+  if (!play?.scoringPlay) return;
+  const tid = String(play.team?.id || '');
+  if (tid && tid === momStreak.teamId) {
+    momStreak.count = Math.min(momStreak.count + 1, 8);
+  } else {
+    momStreak = { teamId: tid, count: 1 };
+  }
+  const boost = Math.min(0.15 + momStreak.count * 0.1, 1.0);
+  crowdUniforms.uMomentum.value = Math.max(crowdUniforms.uMomentum.value, boost);
+  if (momStreak.count >= 3) {
+    const isHome = tid === String(homeTeamId);
+    const col = isHome ? homeColor : awayColor;
+    ambLight.color.lerp(new THREE.Color(col), 0.12 * (momStreak.count / 8));
+    ambLight.intensity = Math.min(ambLight.intensity + 0.15, 4.0);
+  }
+}
+
 // ── Event detection from ESPN play text ───────────────────────────────
 function detectEvent(play) {
   const txt = (play.text || '').toLowerCase();
@@ -1981,6 +2152,15 @@ function detectEvent(play) {
     triggerCrowdReaction(side, hexToNum(teamColor));
     showImpactRipple3D(bx, 0, hexToNum(teamColor));
     triggerCameraShake(is3 ? 0.18 : 0.1);
+    updateMomentumStreak(play);
+    const pName = extractPlayerName(play.text || '');
+    const pts = is3 ? '3PT' : '2PT';
+    if (window._ledFlash) window._ledFlash(`${pName}  ${pts}!`, teamColor, 7000);
+    if (pName && play.coordinate && play.coordinate.x >= 0) {
+      const popSide = attackingSide(play.team?.id, play.period?.number);
+      const { x: px, z: pz } = espnToWorld(play.coordinate.x, play.coordinate.y, popSide);
+      showHologramPopup(`${pName}  ${pts}!`, px, RIM_H + 2.5, pz, teamColor);
+    }
   }
 
   // Shot ripple at shot location
@@ -1996,6 +2176,9 @@ function detectEvent(play) {
     const side = attackingSide(play.team?.id, play.period?.number);
     showScoringFlash('+1', basketWorldX(side), 0, teamColor);
     triggerCrowdReaction(side, hexToNum(teamColor));
+    updateMomentumStreak(play);
+    const ftName = extractPlayerName(play.text || '');
+    if (window._ledFlash && ftName) window._ledFlash(`${ftName}  +1`, teamColor, 4000);
   }
 
   // Timeouts
@@ -2287,6 +2470,15 @@ function updateUI(h) {
   document.getElementById('homeScore').textContent = p.homeScore ?? 0;
   document.getElementById('qtrLabel').textContent  = `Q${p.period?.number ?? 1}`;
   document.getElementById('clkLabel').textContent  = p.clock?.displayValue ?? '';
+
+  // Clutch mode + Chronos update
+  const clkStr = p.clock?.displayValue || '';
+  const clkSec = parseClockSec(clkStr);
+  const diff = Math.abs((p.homeScore || 0) - (p.awayScore || 0));
+  const qNum = p.period?.number || 1;
+  const isClutch = diff <= 5 && clkSec <= 120 && qNum >= 4;
+  setClutchMode(isClutch);
+  updateChronos(clkStr, isClutch || clkSec <= 24);
 
   // Quarter scores bar
   const qtrs = computeQtrScores(h);
