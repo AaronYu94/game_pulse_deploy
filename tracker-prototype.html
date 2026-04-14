@@ -2713,21 +2713,15 @@ function updateHoloIdentity() {
 }
 
 // ── Feature 3: Free-throw camera zoom ────────────────────────────────
-const _defaultCamPos  = new THREE.Vector3(0, 52, 72);
-const _defaultCamLook = new THREE.Vector3(0, 0, -4);
-const _camPosTarget   = new THREE.Vector3().copy(_defaultCamPos);
-const _camLookTarget  = new THREE.Vector3().copy(_defaultCamLook);
-const _camLookCur     = new THREE.Vector3().copy(_defaultCamLook);
-let   _ftZoomActive   = false;
-let   _ftExitTimer    = null;
+let _ftZoomActive = false;
+let _ftExitTimer  = null;
 
 function enterFTZoom(side) {
   if (freeMode) return;
   clearTimeout(_ftExitTimer);
   _ftZoomActive = true;
   const ftX = side === 'right' ? 34 : -34;
-  _camPosTarget.set(ftX * 0.5, 20, 30);
-  _camLookTarget.set(ftX, 4, 0);
+  smoothCamTo({ pos: [ftX * 0.5, 20, 30], look: [ftX, 4, 0] });
   bloomPass.strength  = 1.1;
   bloomPass.threshold = 0.20;
   ambLight.intensity  = 0.9;
@@ -2736,23 +2730,19 @@ function enterFTZoom(side) {
 function exitFTZoom() {
   if (!_ftZoomActive) return;
   _ftZoomActive = false;
-  _camPosTarget.copy(_defaultCamPos);
-  _camLookTarget.copy(_defaultCamLook);
+  smoothCamTo(camTarget);
   _ftExitTimer = setTimeout(() => {
     if (!_ftZoomActive) {
       bloomPass.strength  = clutchActive ? 0.75 : 0.35;
       bloomPass.threshold = clutchActive ? 0.30 : 0.45;
       ambLight.intensity  = 2.5;
     }
-  }, 1200);
+  }, 900);
 }
 
 function updateFTCamera() {
-  if (freeMode) return;
-  const spd = 0.055;
-  camera.position.lerp(_camPosTarget, spd);
-  _camLookCur.lerp(_camLookTarget, spd);
-  camera.lookAt(_camLookCur);
+  // No-op: FT zoom delegates entirely to smoothCamTo.
+  // Kept so render-loop call sites don't need to change.
 }
 
 const camShakeOffset = { x: 0, y: 0 };
