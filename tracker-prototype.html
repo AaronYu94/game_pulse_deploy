@@ -1960,9 +1960,88 @@ const chevUniforms = {
 window._updateChevrons = function(teamId, period) {
   if (!teamId || !homeTeamId) return;
   const side = attackingSide(teamId, period);
-  chevUniforms.uDir.value = side === 'right' ? 1.0 : -1.0;
+  const dir = side === 'right' ? 1.0 : -1.0;
+  chevUniforms.uDir.value = dir;
   // Color locked to red — do not read team colors
+  _possArrow.setDir(dir);
 };
+
+// ── Possession arrow: center-court floor decal ────────────────────────
+const _possArrow = (() => {
+  const CW = 512, CH = 128;
+  const cv  = document.createElement('canvas');
+  cv.width = CW; cv.height = CH;
+  const tex = new THREE.CanvasTexture(cv);
+  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+
+  let _dir = 1;
+
+  function draw() {
+    const c = cv.getContext('2d');
+    c.clearRect(0, 0, CW, CH);
+    const mx = CW / 2, my = CH / 2;
+
+    const spacing = 100;
+    for (let i = 0; i < 3; i++) {
+      const fade = 0.30 + i * 0.35;
+      const ox   = (i - 1) * spacing * _dir;
+      const hs   = 44 + i * 4;
+
+      c.globalAlpha = fade;
+      c.shadowColor = '#ff2200'; c.shadowBlur = 28;
+      c.strokeStyle = '#ff2200';
+      c.lineWidth   = 16 - i * 2;
+      c.lineCap = 'round'; c.lineJoin = 'round';
+
+      c.beginPath();
+      if (_dir > 0) {
+        c.moveTo(mx + ox - 32, my - hs);
+        c.lineTo(mx + ox + 32, my);
+        c.lineTo(mx + ox - 32, my + hs);
+      } else {
+        c.moveTo(mx + ox + 32, my - hs);
+        c.lineTo(mx + ox - 32, my);
+        c.lineTo(mx + ox + 32, my + hs);
+      }
+      c.stroke();
+    }
+    c.globalAlpha = 1;
+
+    const lx = _dir > 0 ? CW * 0.85 : CW * 0.15;
+    c.font = 'bold 20px "JetBrains Mono",monospace';
+    c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.shadowColor = '#ff0000'; c.shadowBlur = 14;
+    c.fillStyle = '#ff4444';
+    c.fillText('ATK', lx, my);
+
+    tex.needsUpdate = true;
+  }
+
+  const mat = new THREE.MeshBasicMaterial({
+    map: tex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+  });
+  const geo  = new THREE.PlaneGeometry(18, 4.5);
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.set(0, 0.07, 3);
+  scene.add(mesh);
+
+  draw();
+
+  let _t = 0;
+  return {
+    setDir(dir) {
+      if (dir === _dir) return;
+      _dir = dir;
+      draw();
+    },
+    update(dt) {
+      _t += dt * 2.2;
+      mat.opacity = 0.60 + Math.sin(_t) * 0.30;
+    },
+  };
+})();
 
 // ══════════════════════════════════════════════════════════════════════
 // ── CHRONOS: holographic clocks above each backboard ─────────────────
@@ -2803,6 +2882,7 @@ function startRenderLoop() {
     // Feature 4: LED overload glow decay → 0.55 base
     updateHoloIdentity();
     updateFTCamera();
+    _possArrow.update(dt);
 
     // Camera micro-shake (skip in free mode — conflicts with OrbitControls)
     if (!freeMode) applyCameraShake();
