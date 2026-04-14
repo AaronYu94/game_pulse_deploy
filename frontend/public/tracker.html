@@ -1516,20 +1516,33 @@ function clearShots() {
 }
 
 function addShotDot(worldX, worldZ, made, colorHex, alpha) {
-  const geo = new THREE.CircleGeometry(0.3, 12);
+  const r = made ? 0.62 : 0.52;
+  const geo = new THREE.CircleGeometry(r, 20);
   const mat = new THREE.MeshBasicMaterial({
-    color: colorHex, transparent: true, opacity: alpha,
-    depthWrite: false,
-    side: THREE.DoubleSide,
+    color: colorHex, transparent: true,
+    opacity: made ? alpha : alpha * 0.55,
+    depthWrite: false, side: THREE.DoubleSide,
   });
-  if (!made) {
-    mat.wireframe = true;
-    mat.opacity = alpha * 0.7;
-  }
+  if (!made) mat.wireframe = true;
   const dot = new THREE.Mesh(geo, mat);
   dot.rotation.x = -Math.PI / 2;
-  dot.position.set(worldX, 0, worldZ);
+  dot.position.set(worldX, 0.008, worldZ);
   shotGroup.add(dot);
+
+  // Glow halo ring for made shots
+  if (made) {
+    const hGeo = new THREE.RingGeometry(r * 1.15, r * 1.75, 24);
+    const hMat = new THREE.MeshBasicMaterial({
+      color: colorHex, transparent: true,
+      opacity: alpha * 0.38,
+      depthWrite: false, side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const halo = new THREE.Mesh(hGeo, hMat);
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.set(worldX, 0.009, worldZ);
+    shotGroup.add(halo);
+  }
 }
 
 // ── Ball ─────────────────────────────────────────────────────────────
@@ -1828,7 +1841,7 @@ function buildCourtScanCloud() {
   return points;
 }
 
-const courtScanCloud = buildCourtScanCloud();
+// court scan cloud removed (ground particle effect)
 
 // ── Tactical Chevrons: attack direction overlay on court floor ─────────
 const chevUniforms = {
@@ -1854,14 +1867,14 @@ const chevUniforms = {
       void main() {
         float x = vUv.x, y = vUv.y - 0.5;
         float along = uDir > 0.0 ? (x - 0.5) * 2.0 : (0.5 - x) * 2.0;
-        float halfMask = smoothstep(0.0, 0.08, along);
-        float phase = fract(along * 4.5 + abs(y) * 2.8 - uTime * 0.28);
-        float stripe = 1.0 - smoothstep(0.0, 0.08, phase);
-        float wFade  = 1.0 - smoothstep(0.28, 0.50, abs(y));
-        float dFade  = smoothstep(0.0, 0.12, along) * mix(0.3, 1.0, along * along);
+        float halfMask = smoothstep(0.0, 0.06, along);
+        float phase = fract(along * 3.0 + abs(y) * 2.5 - uTime * 0.22);
+        float stripe = 1.0 - smoothstep(0.0, 0.30, phase);
+        float wFade  = 1.0 - smoothstep(0.32, 0.50, abs(y));
+        float dFade  = smoothstep(0.0, 0.10, along) * mix(0.45, 1.0, along * along);
         float eFade  = smoothstep(0.0, 0.04, vUv.x)  * smoothstep(1.0, 0.96, vUv.x)
                      * smoothstep(0.0, 0.04, vUv.y)  * smoothstep(1.0, 0.96, vUv.y);
-        float alpha = stripe * wFade * dFade * halfMask * eFade * 0.22;
+        float alpha = stripe * wFade * dFade * halfMask * eFade * 0.42;
         gl_FragColor = vec4(uColor, alpha);
       }
     `,
@@ -1956,32 +1969,10 @@ function updateCourtScan(dt) {
 }
 
 // ── Possession: drives the court scan direction + color ──────────────
+// ── Possession: drives chevron direction + color ──────────────────────
 function updatePossession(play) {
-  if (!play?.team) {
-    scanUniforms.uScanActive.value *= 0.92; // fade out
-    return;
-  }
-  const side = attackingSide(play.team.id, play.period?.number);
-  const isHome = String(play.team.id) === String(homeTeamId);
-  const col = isHome ? homeColor : awayColor;
-
-  scanUniforms.uScanDir.value = side === 'right' ? 1.0 : -1.0;
-  scanUniforms.uScanColor.value.set(col);
-  scanUniforms.uScanActive.value = 1.0;
-
-  // Tactical chevrons follow attacking team
+  if (!play?.team) return;
   if (window._updateChevrons) window._updateChevrons(play.team.id, play.period?.number);
-
-  // Pressure tracking: approximate ball position from play data
-  if (play.coordinate && play.coordinate.x >= 0 && play.coordinate.y >= 0) {
-    const { x: wx, z: wz } = espnToWorld(play.coordinate.x, play.coordinate.y, side);
-    scanUniforms.uPressureX.value = wx;
-    scanUniforms.uPressureZ.value = wz;
-  } else {
-    // Default: pressure toward the basket
-    scanUniforms.uPressureX.value = side === 'right' ? RIM_X * 0.6 : -RIM_X * 0.6;
-    scanUniforms.uPressureZ.value = 0;
-  }
 }
 
 // ── Floating event overlays (3D sprites) ──────────────────────────────
@@ -2049,10 +2040,11 @@ function showCenterOverlay(text, colorHex = '#ffffff', duration = 2200) {
 
 // ── Shot ripple effect (expanding ring on floor) ──────────────────────
 function showShotRipple(worldX, worldZ, colorNum, made) {
-  const ringGeo = new THREE.RingGeometry(0.3, 0.5, 32);
+  const ringGeo = new THREE.RingGeometry(0.2, 0.55, 32);
   const ringMat = new THREE.MeshBasicMaterial({
-    color: colorNum, transparent: true, opacity: made ? 0.8 : 0.4,
+    color: colorNum, transparent: true, opacity: made ? 0.95 : 0.55,
     side: THREE.DoubleSide, depthWrite: false,
+    blending: made ? THREE.AdditiveBlending : THREE.NormalBlending,
   });
   const ring = new THREE.Mesh(ringGeo, ringMat);
   ring.rotation.x = -Math.PI / 2;
@@ -2060,13 +2052,13 @@ function showShotRipple(worldX, worldZ, colorNum, made) {
   scene.add(ring);
 
   const t0 = performance.now();
-  const dur = made ? 1200 : 700;
+  const dur = made ? 1600 : 800;
   function anim(now) {
     const t = (now - t0) / dur;
     if (t >= 1) { scene.remove(ring); ring.geometry.dispose(); ringMat.dispose(); return; }
-    const scale = 1 + t * (made ? 8 : 5);
+    const scale = 1 + t * (made ? 14 : 6);
     ring.scale.setScalar(scale);
-    ringMat.opacity = (made ? 0.8 : 0.4) * (1 - t);
+    ringMat.opacity = (made ? 0.95 : 0.55) * (1 - t * t);
     requestAnimationFrame(anim);
   }
   requestAnimationFrame(anim);
@@ -2475,7 +2467,6 @@ function startRenderLoop() {
     lastLoopTime = now;
     updateCrowd(dt);
     updateBaskets(now / 1000);
-    updateCourtScan(dt);
     chevUniforms.uTime.value += dt;
 
     // Trail fade when not animating ball
@@ -2543,7 +2534,7 @@ function buildShots(upTo) {
         p.coordinate.y < 0 || p.coordinate.y > 35) continue;
     const side = attackingSide(p.team?.id, p.period?.number);
     const { x: wx, z: wz } = espnToWorld(p.coordinate.x, p.coordinate.y, side);
-    const alpha = 0.25 + (count / Math.max(upTo, 1)) * 0.6;
+    const alpha = 0.40 + (count / Math.max(upTo, 1)) * 0.55;
     const isHomeTeam = String(p.team?.id) === String(homeTeamId);
     const col = hexToNum(isHomeTeam ? homeColorHex : awayColorHex);
     addShotDot(wx, wz, p.scoringPlay, col, alpha);
