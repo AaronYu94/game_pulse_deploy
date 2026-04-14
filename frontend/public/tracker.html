@@ -2151,6 +2151,86 @@ function showDigitalNova(worldX, worldZ, colorNum, is3pt) {
   })(performance.now());
 }
 
+// ── Player jersey badge system ────────────────────────────────────────
+const playerMap   = {};   // displayName → { jersey, colorHex }
+const activeBadges = [];  // active floating badge entries
+
+function makeJerseyCanvas(playerName, jersey, colorHex, made) {
+  const SIZE = 128;
+  const cv = document.createElement('canvas');
+  cv.width = SIZE; cv.height = SIZE;
+  const c = cv.getContext('2d');
+  const cx = SIZE / 2, cy = SIZE / 2, r = 50;
+
+  // Background circle with radial gradient
+  const g = c.createRadialGradient(cx - 10, cy - 10, 4, cx, cy, r);
+  g.addColorStop(0, colorHex + '55');
+  g.addColorStop(1, '#000000cc');
+  c.beginPath(); c.arc(cx, cy, r, 0, Math.PI * 2);
+  c.fillStyle = g; c.fill();
+
+  // Border ring
+  c.strokeStyle = colorHex + (made ? 'dd' : '55');
+  c.lineWidth = made ? 3 : 1.5;
+  c.stroke();
+
+  // Jersey number
+  const numStr = (jersey || '?').toString();
+  const fs = numStr.length > 2 ? 34 : numStr.length > 1 ? 42 : 50;
+  c.font = `900 ${fs}px "JetBrains Mono",monospace`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.shadowColor = colorHex; c.shadowBlur = made ? 16 : 6;
+  c.fillStyle = made ? '#ffffff' : '#999999';
+  c.fillText(numStr, cx, cy - 7);
+  c.shadowBlur = 0;
+
+  // Last name (small)
+  const last = (playerName.split(' ').pop() || playerName).toUpperCase().slice(0, 7);
+  c.font = `bold 13px "JetBrains Mono",monospace`;
+  c.fillStyle = colorHex + (made ? 'ff' : '99');
+  c.textBaseline = 'top';
+  c.fillText(last, cx, cy + 20);
+
+  return cv;
+}
+
+function showPlayerBadge(playerName, wx, wz, colorHex, jersey, made, scaleMul = 1.0, duration = 4800) {
+  if (!playerName) return;
+  const cv  = makeJerseyCanvas(playerName, jersey, colorHex, made);
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false,
+    blending: THREE.NormalBlending, opacity: 0,
+  });
+  const sprite = new THREE.Sprite(mat);
+  const baseScale = made ? 4.2 : 3.2;
+  sprite.scale.set(baseScale * scaleMul, baseScale * scaleMul, 1);
+  sprite.position.set(wx, 1.6, wz);
+  scene.add(sprite);
+  activeBadges.push({ sprite, mat, tex, t0: performance.now(), duration, startY: 1.6 });
+}
+
+function updatePlayerBadges() {
+  const now = performance.now();
+  for (let i = activeBadges.length - 1; i >= 0; i--) {
+    const b = activeBadges[i];
+    const t = (now - b.t0) / b.duration;
+    if (t >= 1) {
+      scene.remove(b.sprite);
+      b.mat.dispose(); b.tex.dispose();
+      activeBadges.splice(i, 1);
+      continue;
+    }
+    b.sprite.position.y = b.startY + t * 2.8;   // float upward
+    // Quick appear → hold → slow fade
+    let a;
+    if      (t < 0.08) a = t / 0.08;
+    else if (t < 0.68) a = 1.0;
+    else               a = 1.0 - (t - 0.68) / 0.32;
+    b.mat.opacity = Math.max(0, a) * 0.92;
+  }
+}
+
 // ── Holographic typewriter popup ─────────────────────────────────────
 function showHologramPopup(text, wx, wy, wz, colorHex) {
   const W2 = 512, H2 = 72;
@@ -2263,7 +2343,26 @@ function detectEvent(play) {
     const side = attackingSide(play.team?.id, play.period?.number);
     const { x: wx, z: wz } = espnToWorld(play.coordinate.x, play.coordinate.y, side);
     const isHome = String(play.team?.id) === String(homeTeamId);
-    showShotRipple(wx, wz, hexToNum(isHome ? homeColorHex : awayColorHex), !!play.scoringPlay);
+    const col    = isHome ? homeColorHex : awayColorHex;
+    showShotRipple(wx, wz, hexToNum(col), !!play.scoringPlay);
+    // Jersey badge: floats at shot coordinate
+    const shooter = extractPlayerName(play.text || '');
+    const info    = playerMap[shooter] || {};
+    showPlayerBadge(shooter, wx, wz, info.colorHex || col, info.jersey, !!play.scoringPlay);
+  }
+
+  // Recent participant badge for non-shooting plays (near attacking basket)
+  if (!play.shootingPlay && play.team?.id) {
+    const pName = extractPlayerName(play.text || '');
+    if (pName) {
+      const side = attackingSide(play.team?.id, play.period?.number);
+      const isHome = String(play.team?.id) === String(homeTeamId);
+      const col  = isHome ? homeColorHex : awayColorHex;
+      const info = playerMap[pName] || {};
+      const bx   = basketWorldX(side) * 0.55 + (Math.random() - 0.5) * 14;
+      const bz   = (Math.random() - 0.5) * 18;
+      showPlayerBadge(pName, bx, bz, info.colorHex || col, info.jersey, false, 0.7, 3200);
+    }
   }
 
   // Free throws
@@ -2467,6 +2566,7 @@ function startRenderLoop() {
     lastLoopTime = now;
     updateCrowd(dt);
     updateBaskets(now / 1000);
+    updatePlayerBadges();
     chevUniforms.uTime.value += dt;
 
     // Trail fade when not animating ball
@@ -2925,6 +3025,36 @@ function stopLive() {
 document.getElementById('btnLive').onclick = () => liveMode ? stopLive() : startLive();
 
 // ── Load game data ────────────────────────────────────────────────────
+function loadRosterMap(json) {
+  // boxscore.players is the most reliable source in game summary JSON
+  const bsPlayers = json.boxscore?.players || [];
+  for (const teamData of bsPlayers) {
+    const isHome  = String(teamData.team?.id) === String(homeTeamId);
+    const colorHex = isHome ? homeColorHex : awayColorHex;
+    for (const stat of (teamData.statistics || [])) {
+      for (const entry of (stat.athletes || [])) {
+        const ath = entry.athlete;
+        if (!ath?.displayName) continue;
+        const info = { jersey: ath.jersey || '', colorHex };
+        playerMap[ath.displayName] = info;
+        // Also index by last name as fallback
+        const last = ath.displayName.split(' ').pop();
+        if (last && !playerMap[last]) playerMap[last] = info;
+      }
+    }
+  }
+  // rosters field (present in some events)
+  for (const tr of (json.rosters || [])) {
+    const isHome  = String(tr.team?.id) === String(homeTeamId);
+    const colorHex = isHome ? homeColorHex : awayColorHex;
+    for (const entry of (tr.roster || [])) {
+      const ath = entry.athlete;
+      if (!ath?.displayName || playerMap[ath.displayName]) continue;
+      playerMap[ath.displayName] = { jersey: ath.jersey || '', colorHex };
+    }
+  }
+}
+
 async function loadGame() {
   document.getElementById('tlList').innerHTML = '<div class="tl-item active">Loading game…</div>';
   try {
@@ -2941,6 +3071,9 @@ async function loadGame() {
     awayColorHex  = tColorHex(awayAbbr);
     homeColor     = hexToNum(homeColorHex);
     awayColor     = hexToNum(awayColorHex);
+
+    // Build player → jersey map from boxscore/roster data
+    loadRosterMap(json);
 
     // Paint colors on court
     addPaintColor(-47 + 9.5, awayColor);
