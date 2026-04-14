@@ -3064,9 +3064,11 @@ function loadRosterMap(json) {
         if (!ath?.displayName) continue;
         const info = { jersey: ath.jersey || '', colorHex };
         playerMap[ath.displayName] = info;
+        playerMap[ath.displayName.toUpperCase()] = info;  // match extractPlayerName output
         // Also index by last name as fallback
         const last = ath.displayName.split(' ').pop();
         if (last && !playerMap[last]) playerMap[last] = info;
+        if (last && !playerMap[last.toUpperCase()]) playerMap[last.toUpperCase()] = info;
       }
     }
   }
