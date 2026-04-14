@@ -256,9 +256,11 @@
 <script type="module">
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { RenderPass }      from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { ShaderPass }      from 'three/addons/postprocessing/ShaderPass.js';
+import { FXAAShader }      from 'three/addons/shaders/FXAAShader.js';
+import { OrbitControls }   from 'three/addons/controls/OrbitControls.js';
 
 // ── Config ───────────────────────────────────────────────────────────
 const GAME_ID = new URLSearchParams(window.location.search).get('gameId') || '401705733';
@@ -303,6 +305,11 @@ composer.setSize(W, H);
 composer.addPass(new RenderPass(scene, camera));
 const bloomPass = new UnrealBloomPass(new THREE.Vector2(W * DPR, H * DPR), 0.35, 0.5, 0.45);
 composer.addPass(bloomPass);
+
+// ── Feature 5: FXAA anti-alias pass ──────────────────────────────────
+const fxaaPass = new ShaderPass(FXAAShader);
+fxaaPass.uniforms['resolution'].value.set(1 / (W * DPR), 1 / (H * DPR));
+composer.addPass(fxaaPass);
 
 // Helper: use composer everywhere instead of renderer.render
 function render() { composer.render(); }
@@ -370,6 +377,7 @@ const floorMat = new THREE.MeshPhysicalMaterial({
   clearcoatRoughness: 0.4,
   reflectivity: 0.15,
   envMapIntensity: 0.2,
+  dithering: true,
 });
 const floor = new THREE.Mesh(floorGeo, floorMat);
 floor.rotation.x = -Math.PI / 2;
@@ -1132,7 +1140,8 @@ buildStadiumShell();
   const ledScrollTex = new THREE.CanvasTexture(ledCanvas);
   ledScrollTex.wrapS = THREE.RepeatWrapping;
   ledScrollTex.wrapT = THREE.ClampToEdgeWrapping;
-  ledScrollTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  ledScrollTex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
+  ledScrollTex.magFilter = THREE.NearestFilter;  // crisp pixel-sharp LED text
 
   // Redraw after web font loads
   if (document.fonts && document.fonts.ready) {
@@ -1269,6 +1278,11 @@ buildStadiumShell();
 
     ledScrollTex.offset.x += ledSpeed;
     if (ledScrollTex.offset.x > 1) ledScrollTex.offset.x -= 1;
+  };
+
+  // Feature 4: ribbon overload — burst glow on scoring
+  window._ledOverload = function() {
+    for (const p of ledPanels) p.gl.intensity = 4.5;
   };
 
 }
@@ -1906,7 +1920,7 @@ const chevUniforms = {
         float eFade  = smoothstep(0.0, 0.04, vUv.x)  * smoothstep(1.0, 0.96, vUv.x)
                      * smoothstep(0.0, 0.04, vUv.y)  * smoothstep(1.0, 0.96, vUv.y);
 
-        float alpha = stripe * wFade * dFade * halfMask * eFade * 0.42;
+        float alpha = stripe * wFade * dFade * halfMask * eFade * 0.15;
         gl_FragColor = vec4(uColor, alpha);
       }
     `,
@@ -2350,12 +2364,14 @@ function detectEvent(play) {
     } else {
       showScoringFlash('+2', bx, 0, teamColor);
     }
-    // Basket score reaction: gold burst + net swing + shake + crowd glow sweep + impact ripple
+    // Basket score reaction: gold burst + net swing + shake + crowd glow sweep
     triggerBasketScore(side);
     triggerCrowdReaction(side, hexToNum(teamColor));
     showDigitalNova(bx, 0, hexToNum(teamColor), is3);
     triggerCameraShake(is3 ? 0.18 : 0.1);
     if (window._ambScorePulse) window._ambScorePulse(teamColor, is3 ? 5.5 : 4.0);
+    if (window._ledOverload) window._ledOverload();  // Feature 4: ribbon burst
+    exitFTZoom();                                     // Feature 3: exit FT zoom on score
     updateMomentumStreak(play);
     const pName = extractPlayerName(play.text || '');
     const pts = is3 ? '3PT' : '2PT';
@@ -2367,21 +2383,24 @@ function detectEvent(play) {
     }
   }
 
-  // Shot ripple + jersey badge at shot location
+  // Shooting play: holo identity + jersey badge (no more shot ripple circle)
   if (play.shootingPlay && play.coordinate && play.coordinate.x >= 0 && play.coordinate.y >= 0) {
     const side   = attackingSide(play.team?.id, play.period?.number);
     const { x: wx, z: wz } = espnToWorld(play.coordinate.x, play.coordinate.y, side);
     const isHome = String(play.team?.id) === String(homeTeamId);
     const col    = isHome ? homeColorHex : awayColorHex;
-    showShotRipple(wx, wz, hexToNum(col), !!play.scoringPlay);
-    // Jersey badge: floats at shot coordinate
+    exitFTZoom();                                      // Feature 3: exit FT zoom on shot
+    // Feature 1: holographic shooter identity
     const shooter = extractPlayerName(play.text || '');
-    const info    = playerMap[shooter] || {};
+    showHoloIdentity(shooter, wx, wz, isHome);
+    // Jersey badge floats at shot coordinate
+    const info = playerMap[shooter] || {};
     showPlayerBadge(shooter, wx, wz, info.colorHex || col, info.jersey, !!play.scoringPlay);
   }
 
-  // Recent participant badge for non-shooting plays (near attacking basket)
+  // Non-shooting plays: fade holo + participant badge
   if (!play.shootingPlay && play.team?.id) {
+    clearHoloIdentity(false);                          // Feature 1: fade holo
     const pName = extractPlayerName(play.text || '');
     if (pName) {
       const side = attackingSide(play.team?.id, play.period?.number);
@@ -2394,14 +2413,19 @@ function detectEvent(play) {
     }
   }
 
-  // Free throws
-  if (play.scoringPlay && !play.shootingPlay && txt.includes('free throw')) {
+  // Free throws — Feature 3: zoom to FT line
+  if (!play.shootingPlay && txt.includes('free throw')) {
     const side = attackingSide(play.team?.id, play.period?.number);
-    showScoringFlash('+1', basketWorldX(side), 0, teamColor);
-    triggerCrowdReaction(side, hexToNum(teamColor));
-    updateMomentumStreak(play);
-    const ftName = extractPlayerName(play.text || '');
-    if (window._ledFlash && ftName) window._ledFlash(`${ftName}  +1`, teamColor, 4000);
+    if (!txt.includes('missed') && play.scoringPlay) {
+      showScoringFlash('+1', basketWorldX(side), 0, teamColor);
+      triggerCrowdReaction(side, hexToNum(teamColor));
+      updateMomentumStreak(play);
+      const ftName = extractPlayerName(play.text || '');
+      if (window._ledFlash && ftName) window._ledFlash(`${ftName}  +1`, teamColor, 4000);
+      exitFTZoom();
+    } else {
+      enterFTZoom(side);                               // zoom in for the attempt
+    }
   }
 
   // Timeouts
@@ -2557,6 +2581,156 @@ window._ambScorePulse = function(colorHex, intensity) {
 
 // ── Camera Shake (high-frequency micro-vibration on key moments) ──────
 let camShakeAmp = 0;
+// ── Feature 1: Holographic Shooter Identity ──────────────────────────
+let _activeHoloIdentity = null;
+
+function playerAbbrev(name) {
+  return (name || '').split(/\s+/)
+    .filter(w => w.length > 0)
+    .map(w => w[0].toUpperCase())
+    .join('').slice(0, 3) || '?';
+}
+
+function makeHoloCanvas(abbrev, isHome) {
+  const SZ = 192;
+  const cv = document.createElement('canvas');
+  cv.width = SZ; cv.height = SZ;
+  const c = cv.getContext('2d');
+  const clr = isHome ? '#00ffff' : '#ff3333';
+
+  // Horizontal scan lines
+  for (let sy = 0; sy < SZ; sy += 3) {
+    c.globalAlpha = 0.07; c.fillStyle = clr;
+    c.fillRect(6, sy, SZ - 12, 1);
+  }
+  c.globalAlpha = 1;
+
+  // Outer glow border
+  c.shadowColor = clr; c.shadowBlur = 18;
+  c.strokeStyle = clr; c.lineWidth = 1.5;
+  c.strokeRect(5, 5, SZ - 10, SZ - 10);
+
+  // Corner brackets
+  const cL = 18; c.lineWidth = 2.8;
+  [[5,5,1,1],[SZ-5,5,-1,1],[5,SZ-5,1,-1],[SZ-5,SZ-5,-1,-1]].forEach(([x,y,dx,dy]) => {
+    c.beginPath();
+    c.moveTo(x + dx*cL, y); c.lineTo(x, y); c.lineTo(x, y + dy*cL);
+    c.stroke();
+  });
+
+  // Player abbreviation (top half)
+  const fs = abbrev.length > 2 ? 46 : abbrev.length > 1 ? 56 : 66;
+  c.font = `900 ${fs}px "JetBrains Mono",monospace`;
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.shadowColor = clr; c.shadowBlur = 24;
+  c.fillStyle = '#ffffff';
+  c.fillText(abbrev, SZ/2, SZ * 0.36);
+
+  // Inverted triangle (bottom)
+  const tx = SZ/2, ty0 = SZ * 0.60, tw = 66, th = 46;
+  c.beginPath();
+  c.moveTo(tx - tw/2, ty0);
+  c.lineTo(tx + tw/2, ty0);
+  c.lineTo(tx, ty0 + th);
+  c.closePath();
+  c.shadowBlur = 14;
+  c.fillStyle = clr + '44'; c.fill();
+  c.strokeStyle = clr + 'bb'; c.lineWidth = 1.5; c.stroke();
+
+  return cv;
+}
+
+function showHoloIdentity(playerName, wx, wz, isHome) {
+  clearHoloIdentity(true);
+  const cv  = makeHoloCanvas(playerAbbrev(playerName), isHome);
+  const tex = new THREE.CanvasTexture(cv);
+  const mat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthWrite: false,
+    blending: THREE.AdditiveBlending, opacity: 0,
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(6, 6, 1);
+  sprite.position.set(wx, 5.5, wz);
+  scene.add(sprite);
+  _activeHoloIdentity = { sprite, mat, tex, phase: 'in', t0: performance.now() };
+}
+
+function clearHoloIdentity(instant = false) {
+  if (!_activeHoloIdentity) return;
+  if (instant) {
+    scene.remove(_activeHoloIdentity.sprite);
+    _activeHoloIdentity.mat.dispose();
+    _activeHoloIdentity.tex.dispose();
+    _activeHoloIdentity = null;
+  } else {
+    _activeHoloIdentity.phase = 'fade';
+    _activeHoloIdentity.fadeStart = performance.now();
+  }
+}
+
+function updateHoloIdentity() {
+  if (!_activeHoloIdentity) return;
+  const h = _activeHoloIdentity, now = performance.now();
+  if (h.phase === 'in') {
+    h.mat.opacity = Math.min(0.88, (now - h.t0) / 300 * 0.88);
+    if (ballMesh.visible) {
+      h.sprite.position.x += (ballMesh.position.x - h.sprite.position.x) * 0.06;
+      h.sprite.position.z += (ballMesh.position.z - h.sprite.position.z) * 0.06;
+    }
+  } else {
+    const t = (now - h.fadeStart) / 1500;
+    if (t >= 1) {
+      scene.remove(h.sprite); h.mat.dispose(); h.tex.dispose();
+      _activeHoloIdentity = null; return;
+    }
+    h.sprite.position.y += 0.025;
+    h.mat.opacity = 0.88 * (1 - t * t);
+  }
+}
+
+// ── Feature 3: Free-throw camera zoom ────────────────────────────────
+const _defaultCamPos  = new THREE.Vector3(0, 52, 72);
+const _defaultCamLook = new THREE.Vector3(0, 0, -4);
+const _camPosTarget   = new THREE.Vector3().copy(_defaultCamPos);
+const _camLookTarget  = new THREE.Vector3().copy(_defaultCamLook);
+const _camLookCur     = new THREE.Vector3().copy(_defaultCamLook);
+let   _ftZoomActive   = false;
+let   _ftExitTimer    = null;
+
+function enterFTZoom(side) {
+  if (freeMode) return;
+  clearTimeout(_ftExitTimer);
+  _ftZoomActive = true;
+  const ftX = side === 'right' ? 34 : -34;
+  _camPosTarget.set(ftX * 0.5, 20, 30);
+  _camLookTarget.set(ftX, 4, 0);
+  bloomPass.strength  = 1.1;
+  bloomPass.threshold = 0.20;
+  ambLight.intensity  = 0.9;
+}
+
+function exitFTZoom() {
+  if (!_ftZoomActive) return;
+  _ftZoomActive = false;
+  _camPosTarget.copy(_defaultCamPos);
+  _camLookTarget.copy(_defaultCamLook);
+  _ftExitTimer = setTimeout(() => {
+    if (!_ftZoomActive) {
+      bloomPass.strength  = clutchActive ? 0.75 : 0.35;
+      bloomPass.threshold = clutchActive ? 0.30 : 0.45;
+      ambLight.intensity  = 2.5;
+    }
+  }, 1200);
+}
+
+function updateFTCamera() {
+  if (freeMode) return;
+  const spd = 0.055;
+  camera.position.lerp(_camPosTarget, spd);
+  _camLookCur.lerp(_camLookTarget, spd);
+  camera.lookAt(_camLookCur);
+}
+
 const camShakeOffset = { x: 0, y: 0 };
 
 function triggerCameraShake(intensity = 0.15) {
@@ -2611,6 +2785,10 @@ function startRenderLoop() {
     // Score pulse light decay
     if (_scorePulseLight.intensity > 0.05) _scorePulseLight.intensity *= 0.86;
     else _scorePulseLight.intensity = 0;
+
+    // Feature 4: LED overload glow decay → 0.55 base
+    updateHoloIdentity();
+    updateFTCamera();
 
     // Camera micro-shake (skip in free mode — conflicts with OrbitControls)
     if (!freeMode) applyCameraShake();
