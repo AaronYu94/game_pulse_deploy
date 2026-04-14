@@ -1167,22 +1167,42 @@ buildStadiumShell();
   function addRibbon(x, y, z, w, h, nx, nz) {
     const rotY = Math.atan2(nx, nz);
 
-    // Housing: deep recessed frame — "embedded screen" surround
-    const hGeo = new THREE.BoxGeometry(w, h + 0.4, 0.40);
+    // Housing: dark recessed frame (flat box behind the curved panel)
+    const hGeo = new THREE.BoxGeometry(w, h + 0.5, 0.45);
     const housing = new THREE.Mesh(hGeo, housingMat);
     housing.position.set(x + nx * 0.08, y, z + nz * 0.08);
     housing.rotation.y = rotY;
     scene.add(housing);
 
-    // LED panel: thin box with slight depth (not a flat plane)
-    const pGeo = new THREE.BoxGeometry(w - 0.2, h, 0.06);
+    // ── Curved LED panel: CylinderGeometry arc ───────────────────────
+    // Three.js CylinderGeometry: theta=0 outer surface faces +Z.
+    // After rotation.y = rotY the face aligns with the ribbon's outward normal.
+    // Place the cylinder center R units behind the desired face position so the
+    // outer arc lands exactly at (x + nx*0.35, y, z + nz*0.35).
+    const R      = Math.max(w * 3.5, 200);  // large radius → gentle visible curve
+    const arcLen = w / R;                    // arc angle in radians (same visual angle for all ribbons)
+
+    const pGeo = new THREE.CylinderGeometry(
+      R, R,           // radiusTop / radiusBottom
+      h,              // height along Y (ribbon height)
+      72, 1,          // radialSegments (smooth), heightSegments
+      true,           // openEnded — no caps
+      -arcLen / 2,    // thetaStart: centre the arc on the facing direction
+      arcLen          // thetaLength
+    );
+
     const panel = new THREE.Mesh(pGeo, ledRibbonMat);
-    panel.position.set(x + nx * 0.35, y, z + nz * 0.35);
+    // Cylinder centre is R units behind the face in the (nx,nz) direction
+    panel.position.set(
+      x + nx * (0.35 - R),
+      y,
+      z + nz * (0.35 - R)
+    );
     panel.rotation.y = rotY;
     scene.add(panel);
 
-    // Stronger glow light for wider panel
-    const gl = new THREE.PointLight(0xff1100, 0.55, 20);
+    // Glow: locked to red (#ff0000) for black-red aesthetic
+    const gl = new THREE.PointLight(0xff0000, 0.55, 20);
     gl.position.set(x + nx * 2.5, y, z + nz * 2.5);
     scene.add(gl);
 
@@ -1860,7 +1880,7 @@ function buildCourtScanCloud() {
 // ── Tactical Chevrons: attack direction overlay on court floor ─────────
 const chevUniforms = {
   uTime:  { value: 0.0 },
-  uColor: { value: new THREE.Color(0xff2211) },
+  uColor: { value: new THREE.Color(0xff0000) },  // locked red
   uDir:   { value: 1.0 },
 };
 {
@@ -1906,9 +1926,8 @@ const chevUniforms = {
 window._updateChevrons = function(teamId, period) {
   if (!teamId || !homeTeamId) return;
   const side = attackingSide(teamId, period);
-  const isHome = String(teamId) === String(homeTeamId);
-  chevUniforms.uDir.value   = side === 'right' ? 1.0 : -1.0;
-  chevUniforms.uColor.value.set(isHome ? homeColor : awayColor);
+  chevUniforms.uDir.value = side === 'right' ? 1.0 : -1.0;
+  // Color locked to red — do not read team colors
 };
 
 // ══════════════════════════════════════════════════════════════════════
@@ -2291,7 +2310,12 @@ function showHologramPopup(text, wx, wy, wz, colorHex) {
 
 // ── Player name extraction ────────────────────────────────────────────
 function extractPlayerName(text) {
-  const m = (text || '').match(/^([A-Z][a-zA-Z'\.\-]+(?: [A-Z][a-zA-Z'\.\-]+)+)/);
+  if (!text) return '';
+  // Strip ESPN timestamps like "(10:22)" and leading/trailing whitespace
+  const clean = text.replace(/\(\d+:\d+\)/g, '').replace(/\s+/g, ' ').trim();
+  // Match 2-4 consecutive capitalised words at start of string
+  // Allows apostrophes, dots, hyphens (O'Neal, Jr., Al-Farouq)
+  const m = clean.match(/^((?:[A-Z][a-zA-Z'\.\-]+)(?:\s+[A-Z][a-zA-Z'\.\-]+){1,3})/);
   return m ? m[1].toUpperCase() : '';
 }
 
@@ -2333,7 +2357,7 @@ function detectEvent(play) {
     // Basket score reaction: gold burst + net swing + shake + crowd glow sweep
     triggerBasketScore(side);
     triggerCrowdReaction(side, hexToNum(teamColor));
-    showDigitalNova(bx, 0, hexToNum(teamColor), is3);
+    showDigitalNova(bx, 0, 0xff0000, is3);  // locked red
     triggerCameraShake(is3 ? 0.18 : 0.1);
     if (window._ambScorePulse) window._ambScorePulse(teamColor, is3 ? 5.5 : 4.0);
     if (window._ledOverload) window._ledOverload();  // Feature 4: ribbon burst
