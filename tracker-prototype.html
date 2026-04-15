@@ -292,7 +292,7 @@ renderer.toneMappingExposure = 2.1;
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
-scene.fog = new THREE.FogExp2(0x000000, 0.004);
+scene.fog = new THREE.FogExp2(0x000000, 0.002);
 
 const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 500);
 camera.position.set(0, 52, 72);
@@ -303,7 +303,7 @@ const composer = new EffectComposer(renderer);
 composer.setPixelRatio(DPR);
 composer.setSize(W, H);
 composer.addPass(new RenderPass(scene, camera));
-const bloomPass = new UnrealBloomPass(new THREE.Vector2(W * DPR, H * DPR), 0.35, 0.5, 0.45);
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(W * DPR, H * DPR), 0.22, 0.5, 0.30);
 composer.addPass(bloomPass);
 
 // ── Feature 5: FXAA anti-alias pass ──────────────────────────────────
@@ -316,7 +316,7 @@ function render() { composer.render(); }
 
 // ── Lighting ─────────────────────────────────────────────────────────
 // Arena overhead spotlights
-const ambLight = new THREE.AmbientLight(0x556677, 8.0);
+const ambLight = new THREE.AmbientLight(0x332222, 4.0);
 scene.add(ambLight);
 
 function addSpot(x, y, z, intensity, color = 0xfff8e8) {
@@ -371,11 +371,11 @@ const floorGeo = new THREE.PlaneGeometry(COURT_HALF_L * 2, COURT_HALF_W * 2);
 const floorMat = new THREE.MeshPhysicalMaterial({
   map: woodTex,
   color: 0x303030,
-  roughness: 0.85,             // matte — absorbs light
-  metalness: 0.0,
-  clearcoat: 0.25,             // subtle edge fresnel only
-  clearcoatRoughness: 0.4,
-  reflectivity: 0.15,
+  roughness: 0.45,
+  metalness: 0.05,
+  clearcoat: 0.55,
+  clearcoatRoughness: 0.2,
+  reflectivity: 0.55,
   envMapIntensity: 0.2,
   dithering: true,
 });
@@ -428,7 +428,7 @@ function makeCourtLines() {
   // Court center in canvas: (470, 250)
   const cx = 470, cy = 250;
 
-  lctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  lctx.strokeStyle = 'rgba(255,255,255,0.95)';
   lctx.lineWidth = 2;
 
   function ft(x, z) { return [cx + x * S, cy + z * S]; }
@@ -520,13 +520,14 @@ function makeCourtLines() {
   lctx.restore();
 
   const lineTex = new THREE.CanvasTexture(lc);
+  lineTex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
   return lineTex;
 }
 
 const linesTex = makeCourtLines();
 const linesGeo = new THREE.PlaneGeometry(COURT_HALF_L * 2, COURT_HALF_W * 2);
 const linesMat = new THREE.MeshBasicMaterial({
-  map: linesTex, transparent: true, opacity: 0.9,
+  map: linesTex, transparent: true, opacity: 1.0,
   depthWrite: false,
 });
 const linesPlane = new THREE.Mesh(linesGeo, linesMat);
@@ -1065,19 +1066,25 @@ function buildStadiumShell() {
   addTier(COURT_HALF_L + 6, 0, COURT_HALF_W * 2 + 16, 3, 6, 3.5, 3.0, -Math.PI / 2);
 
   // Volumetric backlights behind far stands
-  const backColors = [0x1122aa, 0x0a0a33, 0x221144];
+  const backColors = [0x2233cc, 0x111155, 0x331166];
   for (let i = 0; i < 3; i++) {
-    const spot = new THREE.SpotLight(backColors[i], 30, 80, Math.PI / 5, 0.7, 1.5);
+    const spot = new THREE.SpotLight(backColors[i], 55, 100, Math.PI / 5, 0.7, 1.5);
     spot.position.set((i - 1) * 35, 32, -(COURT_HALF_W + 28));
     spot.target.position.set((i - 1) * 15, 0, 0);
     scene.add(spot); scene.add(spot.target);
   }
   // Rim lights behind end stands
   for (const sx of [-1, 1]) {
-    const spot = new THREE.SpotLight(0x110022, 15, 60, Math.PI / 5, 0.8, 1.5);
+    const spot = new THREE.SpotLight(0x220044, 35, 80, Math.PI / 5, 0.8, 1.5);
     spot.position.set(sx * (COURT_HALF_L + 22), 28, 0);
     spot.target.position.set(0, 0, 0);
     scene.add(spot); scene.add(spot.target);
+  }
+  // Camera-side depth fill (near stands, very soft blue)
+  for (const sx of [-1, 0, 1]) {
+    const fill = new THREE.PointLight(0x112244, 18, 70);
+    fill.position.set(sx * 40, 22, COURT_HALF_W + 18);
+    scene.add(fill);
   }
 }
 buildStadiumShell();
@@ -1217,9 +1224,9 @@ buildStadiumShell();
   addRibbon(54.5, 5.25, 0, 62, 3.5, -1, 0);
 
   // ── 4. Floor reflectivity boost ───────────────────────────────────
-  floorMat.clearcoat = 0.4;
-  floorMat.clearcoatRoughness = 0.3;
-  floorMat.reflectivity = 0.3;
+  floorMat.clearcoat = 0.65;
+  floorMat.clearcoatRoughness = 0.15;
+  floorMat.reflectivity = 0.65;
 
   // ── 5. Scroll animation ───────────────────────────────────────────
   let ledSpeed = 0.0007;
@@ -1530,8 +1537,8 @@ let crowdTime = 0;
 function updateCrowd(dt) {
   crowdTime += dt;
   crowdUniforms.uTime.value = crowdTime;
-  // Momentum decays slowly toward 0
-  crowdUniforms.uMomentum.value *= (1.0 - dt * 0.15);
+  // Momentum decays toward a small base value (keeps crowd alive)
+  crowdUniforms.uMomentum.value = Math.max(0.15, crowdUniforms.uMomentum.value * (1.0 - dt * 0.15));
 }
 
 // ── Shot dots on floor ────────────────────────────────────────────────
@@ -1946,7 +1953,7 @@ const _possArrow = (() => {
   const cv  = document.createElement('canvas');
   cv.width = CW; cv.height = CH;
   const tex = new THREE.CanvasTexture(cv);
-  tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+  tex.anisotropy = Math.min(16, renderer.capabilities.getMaxAnisotropy());
 
   let _dir = 1;
 
@@ -2070,10 +2077,10 @@ function setClutchMode(on) {
     scene.fog.color.set(0x110000);
     scanUniforms.uScanColor.value.set(0xff1111);
   } else {
-    bloomPass.strength = 0.35;
-    bloomPass.threshold = 0.45;
-    ambLight.color.set(0x556677);
-    ambLight.intensity = 8.0;
+    bloomPass.strength = 0.22;
+    bloomPass.threshold = 0.30;
+    ambLight.color.set(0x332222);
+    ambLight.intensity = 4.0;
     scene.fog.color.set(0x000000);
   }
 }
@@ -2786,9 +2793,9 @@ function exitFTZoom() {
   smoothCamTo(camTarget);
   _ftExitTimer = setTimeout(() => {
     if (!_ftZoomActive) {
-      bloomPass.strength  = clutchActive ? 0.75 : 0.35;
-      bloomPass.threshold = clutchActive ? 0.30 : 0.45;
-      ambLight.intensity  = 8.0;
+      bloomPass.strength  = clutchActive ? 0.75 : 0.22;
+      bloomPass.threshold = 0.30;
+      ambLight.intensity  = 4.0;
     }
   }, 900);
 }
