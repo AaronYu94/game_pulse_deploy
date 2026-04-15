@@ -1175,30 +1175,10 @@ buildStadiumShell();
     housing.rotation.y = rotY;
     scene.add(housing);
 
-    // ── Curved LED panel: CylinderGeometry arc ───────────────────────
-    // Three.js CylinderGeometry: theta=0 outer surface faces +Z.
-    // After rotation.y = rotY the face aligns with the ribbon's outward normal.
-    // Place the cylinder center R units behind the desired face position so the
-    // outer arc lands exactly at (x + nx*0.35, y, z + nz*0.35).
-    const R      = Math.max(w * 3.5, 200);  // large radius → gentle visible curve
-    const arcLen = w / R;                    // arc angle in radians (same visual angle for all ribbons)
-
-    const pGeo = new THREE.CylinderGeometry(
-      R, R,           // radiusTop / radiusBottom
-      h,              // height along Y (ribbon height)
-      72, 1,          // radialSegments (smooth), heightSegments
-      true,           // openEnded — no caps
-      -arcLen / 2,    // thetaStart: centre the arc on the facing direction
-      arcLen          // thetaLength
-    );
-
+    // ── Flat LED panel ────────────────────────────────────────────────
+    const pGeo  = new THREE.PlaneGeometry(w, h);
     const panel = new THREE.Mesh(pGeo, ledRibbonMat);
-    // Cylinder centre is R units behind the face in the (nx,nz) direction
-    panel.position.set(
-      x + nx * (0.35 - R),
-      y,
-      z + nz * (0.35 - R)
-    );
+    panel.position.set(x + nx * 0.35, y, z + nz * 0.35);
     panel.rotation.y = rotY;
     scene.add(panel);
 
