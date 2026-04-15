@@ -292,7 +292,7 @@ renderer.setSize(W, H);              // applies DPR internally → actual buffer
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.0;
+renderer.toneMappingExposure = 1.55;  // brighter overall arena
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -320,7 +320,7 @@ function render() { composer.render(); }
 
 // ── Lighting ─────────────────────────────────────────────────────────
 // Arena overhead spotlights
-const ambLight = new THREE.AmbientLight(0x2a2a55, 2.5);
+const ambLight = new THREE.AmbientLight(0x445566, 4.5);  // brighter, less purple
 scene.add(ambLight);
 
 function addSpot(x, y, z, intensity, color = 0xfff8e8) {
@@ -342,7 +342,7 @@ addSpot( 12, 34, 5, 180);
 addSpot( 35, 32, 5, 160);
 
 // Side fill — scorer's table side
-const fillLight = new THREE.DirectionalLight(0x6688aa, 3.5);
+const fillLight = new THREE.DirectionalLight(0x8899bb, 6.0);  // stronger cool fill
 fillLight.position.set(0, 20, 55);
 scene.add(fillLight);
 
@@ -374,7 +374,7 @@ const woodTex = makeWoodTexture();
 const floorGeo = new THREE.PlaneGeometry(COURT_HALF_L * 2, COURT_HALF_W * 2);
 const floorMat = new THREE.MeshPhysicalMaterial({
   map: woodTex,
-  color: 0x080808,             // darken the base further
+  color: 0x181818,             // slightly lighter base — reflects arena lights
   roughness: 0.85,             // matte — absorbs light
   metalness: 0.0,
   clearcoat: 0.25,             // subtle edge fresnel only
@@ -2069,8 +2069,8 @@ function setClutchMode(on) {
   } else {
     bloomPass.strength = 0.35;
     bloomPass.threshold = 0.45;
-    ambLight.color.set(0x2a2a55);
-    ambLight.intensity = 2.5;
+    ambLight.color.set(0x445566);
+    ambLight.intensity = 4.5;
     scene.fog.color.set(0x000000);
   }
 }
@@ -2795,7 +2795,7 @@ function exitFTZoom() {
     if (!_ftZoomActive) {
       bloomPass.strength  = clutchActive ? 0.75 : 0.35;
       bloomPass.threshold = clutchActive ? 0.30 : 0.45;
-      ambLight.intensity  = 2.5;
+      ambLight.intensity  = 4.5;
     }
   }, 900);
 }
@@ -3381,7 +3381,9 @@ async function loadGame() {
       el.className = 'hb-status replay';
     }
 
-    plays    = (json.plays || []).filter(p => p.period?.number);
+    plays    = (json.plays || [])
+      .filter(p => p.period?.number)
+      .sort((a, b) => (parseInt(a.sequenceNumber,10)||0) - (parseInt(b.sequenceNumber,10)||0));
     playhead = plays.length - 1;
     document.getElementById('scrubber').max = Math.max(0, plays.length - 1);
 
