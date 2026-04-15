@@ -10,14 +10,21 @@ import { getEquippedFrame, getFrameById } from '../lib/espn.js';
 
 const CAT_TABS = [
   { key: 'all', label: 'All' },
-  { key: 'totd', label: 'Topic of the Day' },
+  { key: 'totd', label: '🔥 TOTD' },
   { key: 'game', label: 'Games' },
   { key: 'player', label: 'Players' },
   { key: 'trade', label: 'Trade' },
   { key: 'chat', label: 'Chat' },
 ];
 
-const CAT_LABELS = { game: 'Games', player: 'Players', trade: 'Trade', chat: 'Chat', totd: 'TOTD' };
+const CAT_LABELS = { game: 'GAMES', player: 'PLAYERS', trade: 'TRADE', chat: 'CHAT', totd: 'TOTD' };
+const CAT_COLORS = {
+  game:   { bg: 'rgba(230,0,0,.18)',    color: '#ff4444' },
+  player: { bg: 'rgba(255,180,0,.18)',  color: '#ffb400' },
+  trade:  { bg: 'rgba(0,140,255,.18)',  color: '#3b9eff' },
+  chat:   { bg: 'rgba(100,200,100,.15)', color: '#6dc36d' },
+  totd:   { bg: 'rgba(255,180,0,.22)',  color: '#ffb400' },
+};
 
 const DAILY_TOPICS = [
   { q: "Who is the best point guard in the league right now?", sub: "Stats, impact, leadership — make your case." },
@@ -56,56 +63,96 @@ function timeAgo(dateStr) {
 }
 
 function CatBadge({ cat }) {
-  const map = { game: 'cat-badge--game', player: 'cat-badge--player', trade: 'cat-badge--trade', chat: 'cat-badge--chat', totd: 'cat-badge--totd' };
-  return <span className={`cat-badge ${map[cat] || ''}`}>{CAT_LABELS[cat] || cat}</span>;
+  const c = CAT_COLORS[cat] || { bg: 'rgba(255,255,255,.1)', color: 'var(--text-muted)' };
+  return (
+    <span className="forum-cat-badge" style={{ background: c.bg, color: c.color }}>
+      {CAT_LABELS[cat] || cat}
+    </span>
+  );
 }
 
-function PostItem({ post, currentUser, onLike, onDislike }) {
-  const author = post.author_name || 'Anonymous';
-  const initials = author.slice(0, 2).toUpperCase();
-  const equippedId = getEquippedFrame();
-  const frame = (currentUser && currentUser.username === author && equippedId) ? getFrameById(equippedId) : null;
-
+function AuthorAvatar({ name, frame }) {
+  const initials = (name || 'AN').slice(0, 2).toUpperCase();
   return (
     <div
-      className="post-item"
-      style={frame ? { borderLeft: `3px solid ${frame.bg}`, background: `${frame.bg}14`, position: 'relative' } : { position: 'relative' }}
+      className="forum-avatar"
+      style={frame ? { background: frame.bg, color: frame.text } : {}}
     >
-      {frame && (
-        <div style={{
-          position: 'absolute', top: 8, right: 10, width: 22, height: 22, borderRadius: '50%',
-          background: frame.bg, color: frame.text, display: 'flex', alignItems: 'center',
-          justifyContent: 'center', fontSize: 8, fontWeight: 900, fontFamily: 'var(--f-display)',
-        }}>{frame.abbr}</div>
-      )}
-      <div
-        className="post-avatar"
-        style={frame ? { background: frame.bg, color: frame.text } : {}}
-      >{initials}</div>
-      <div className="post-item__body">
-        <div className="post-item__header">
-          <span className="post-item__author" style={frame ? { color: frame.bg } : {}}>@{author}</span>
-          <span className="dot">·</span>
-          <span className="post-item__time">{timeAgo(post.created_at)}</span>
+      {initials}
+    </div>
+  );
+}
+
+function PostItem({ post, currentUser, onLike, onDislike, isOP }) {
+  const author = post.author_name || 'Anonymous';
+  const equippedId = getEquippedFrame();
+  const frame = (currentUser?.username === author && equippedId) ? getFrameById(equippedId) : null;
+
+  return (
+    <div className={`forum-post${isOP ? ' forum-post--op' : ''}${post.liked_by_me ? ' forum-post--liked' : ''}`}
+      style={frame ? { borderLeftColor: frame.bg } : {}}>
+      <div className="forum-post__vote">
+        <button
+          className={`forum-vote-btn forum-vote-btn--up${post.liked_by_me ? ' active' : ''}`}
+          onClick={() => onLike(post.id)}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </button>
+        <span className="forum-vote-count">{post.likes || 0}</span>
+        <button
+          className={`forum-vote-btn forum-vote-btn--down${post.disliked_by_me ? ' active' : ''}`}
+          onClick={() => onDislike(post.id)}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </button>
+      </div>
+
+      <div className="forum-post__main">
+        <div className="forum-post__header">
+          <AuthorAvatar name={author} frame={frame} />
+          <span className="forum-post__author" style={frame ? { color: frame.bg } : {}}>
+            @{author}
+          </span>
+          {isOP && <span className="forum-op-badge">OP</span>}
+          {frame && (
+            <span className="forum-frame-badge" style={{ background: frame.bg, color: frame.text }}>
+              {frame.abbr}
+            </span>
+          )}
+          <span className="forum-post__time">{timeAgo(post.created_at)}</span>
         </div>
-        <div className="post-item__content" style={{ whiteSpace: 'pre-wrap' }}>{post.content}</div>
-        <div className="post-item__actions">
-          <button
-            className={`vote-btn vote-btn--up${post.liked_by_me ? ' active' : ''}`}
-            onClick={() => onLike(post.id)}
-            title="Upvote"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
-            <span>{post.likes || 0}</span>
-          </button>
-          <button
-            className={`vote-btn vote-btn--down${post.disliked_by_me ? ' active' : ''}`}
-            onClick={() => onDislike(post.id)}
-            title="Downvote"
-          >
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-        </div>
+        <div className="forum-post__content">{post.content}</div>
+      </div>
+    </div>
+  );
+}
+
+function TopicCard({ topic, isActive, onClick }) {
+  const c = CAT_COLORS[topic.category] || CAT_COLORS.chat;
+  return (
+    <div
+      className={`forum-topic-card${isActive ? ' forum-topic-card--active' : ''}`}
+      onClick={onClick}
+      style={isActive ? { borderLeftColor: c.color } : {}}
+    >
+      <div className="forum-topic-card__top">
+        <CatBadge cat={topic.category} />
+        <span className="forum-topic-card__time">{timeAgo(topic.created_at)}</span>
+      </div>
+      <div className="forum-topic-card__title">{topic.title}</div>
+      <div className="forum-topic-card__preview">{topic.body}</div>
+      <div className="forum-topic-card__footer">
+        <span className="forum-topic-card__author">@{topic.author_name || 'Anonymous'}</span>
+        <span className="forum-topic-card__replies">
+          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+          {topic.reply_count || 0}
+        </span>
       </div>
     </div>
   );
@@ -130,6 +177,7 @@ export default function ForumPage() {
   const [replySubmitting, setReplySubmitting] = useState(false);
   const [toast, setToast] = useState('');
   const todayTopic = getTodayTopic();
+  const threadRef = useRef(null);
 
   const showToast = useCallback((msg) => {
     setToast(msg); setTimeout(() => setToast(''), 2200);
@@ -150,19 +198,18 @@ export default function ForumPage() {
     setActiveTopic(topic);
     setThreadLoading(true);
     setPosts([]);
+    setShowNewForm(false);
     try {
       const data = await apiGetTopic(topic.id);
       setPosts(data.posts || []);
     } catch (err) { console.error(err); }
     finally { setThreadLoading(false); }
+    setTimeout(() => threadRef.current?.scrollTo({ top: 0, behavior: 'smooth' }), 50);
   }
 
   async function handleCreateTopic(e) {
     e.preventDefault();
-    if (!isLoggedIn) {
-      showToast('Sign in to start a discussion.');
-      return;
-    }
+    if (!isLoggedIn) { showToast('Sign in to start a discussion.'); return; }
     if (newTitle.length < 5 || newBody.length < 10) {
       showToast('Title needs 5+ chars, body needs 10+ chars'); return;
     }
@@ -178,27 +225,20 @@ export default function ForumPage() {
 
   async function handleReply(e) {
     e.preventDefault();
-    if (!isLoggedIn) {
-      showToast('Sign in to reply to this topic.');
-      return;
-    }
+    if (!isLoggedIn) { showToast('Sign in to reply.'); return; }
     if (!replyText.trim()) return;
     setReplySubmitting(true);
     try {
       const data = await apiPostReply(activeTopic.id, replyText);
       setPosts(p => [...p, data.post]);
       setReplyText('');
-      // Refresh topic reply count
       setTopics(ts => ts.map(t => t.id === activeTopic.id ? { ...t, reply_count: (t.reply_count || 0) + 1 } : t));
     } catch (err) { showToast(err.message); }
     finally { setReplySubmitting(false); }
   }
 
   async function handleLike(postId) {
-    if (!isLoggedIn) {
-      showToast('Sign in to vote on replies.');
-      return;
-    }
+    if (!isLoggedIn) { showToast('Sign in to vote.'); return; }
     try {
       const res = await apiLikeReply(postId);
       setPosts(ps => ps.map(p => p.id === postId ? { ...p, likes: res.likes, liked_by_me: res.liked, disliked_by_me: false } : p));
@@ -206,254 +246,402 @@ export default function ForumPage() {
   }
 
   async function handleDislike(postId) {
-    if (!isLoggedIn) {
-      showToast('Sign in to vote on replies.');
-      return;
-    }
+    if (!isLoggedIn) { showToast('Sign in to vote.'); return; }
     try {
       const res = await apiDislikeReply(postId);
       setPosts(ps => ps.map(p => p.id === postId ? { ...p, likes: res.likes, liked_by_me: false, disliked_by_me: res.disliked } : p));
     } catch (err) { showToast(err.message); }
   }
 
+  const hotTopics = topics.slice(0, 4);
+
   return (
     <div className="app-container app-container--forum">
       <Header searchPlaceholder="Search forum topics..." />
       <SideNav />
 
-      {/* Panel Matches: Topic List */}
+      {/* ── Left Panel: Topic List ── */}
       <aside className="panel-matches">
-        <div className="panel-header">
-          <h3>Fan Forum</h3>
-          <div className="live-tag"><span>TOPICS</span></div>
+        {/* Header */}
+        <div className="forum-panel-header">
+          <div className="forum-panel-title">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            FAN FORUM
+          </div>
+          <span className="forum-topic-count">{topics.length} topics</span>
         </div>
-        {/* Category tabs */}
-        <div className="cat-tabs" style={{ display: 'flex', gap: 0, borderBottom: '1px solid var(--border)', overflowX: 'auto', scrollbarWidth: 'none' }}>
+
+        {/* Category Pills */}
+        <div className="forum-cat-pills">
           {CAT_TABS.map(t => (
             <button
               key={t.key}
-              className={`cat-tab${cat === t.key ? ' active' : ''}`}
-              style={{ padding: '10px 13px', fontSize: 12, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase', color: cat === t.key ? 'var(--accent)' : 'var(--text-muted)', cursor: 'pointer', border: 'none', background: 'none', borderBottom: cat === t.key ? '2px solid var(--accent)' : '2px solid transparent', marginBottom: -1, whiteSpace: 'nowrap', fontFamily: 'var(--f-display)' }}
+              className={`forum-cat-pill${cat === t.key ? ' active' : ''}`}
               onClick={() => { setCat(t.key); setActiveTopic(null); }}
             >
               {t.label}
             </button>
           ))}
         </div>
-        <div id="topicList" className="panel-games-scroll">
+
+        {/* Topic List */}
+        <div className="panel-games-scroll">
           {topicsLoading ? (
-            <div className="loading" style={{ padding: 24 }}><div className="loading__spinner" /></div>
+            <div className="loading" style={{ padding: 32 }}><div className="loading__spinner" /></div>
           ) : topics.length === 0 ? (
-            <div className="empty">No topics yet.</div>
+            <div className="forum-empty-list">
+              <div style={{ fontSize: 32, opacity: 0.3 }}>💬</div>
+              <div>No topics yet.</div>
+              {isLoggedIn && (
+                <button className="forum-new-btn-sm" onClick={() => { setActiveTopic(null); setShowNewForm(true); }}>
+                  Start one
+                </button>
+              )}
+            </div>
           ) : (
             topics.map(t => (
-              <div
+              <TopicCard
                 key={t.id}
-                className={`topic-card${activeTopic?.id === t.id ? ' active' : ''}`}
+                topic={t}
+                isActive={activeTopic?.id === t.id}
                 onClick={() => openTopic(t)}
-              >
-                <div className="topic-card__top">
-                  <CatBadge cat={t.category} />
-                </div>
-                <div className="topic-card__title">{t.title}</div>
-                <div className="topic-card__preview">{t.body}</div>
-                <div className="topic-card__meta">
-                  <span>@{t.author_name || 'Anonymous'}</span>
-                  <span className="dot">·</span>
-                  <span>{timeAgo(t.created_at)}</span>
-                  <span className="reply-badge">{t.reply_count || 0} replies</span>
-                </div>
-              </div>
+              />
             ))
           )}
         </div>
       </aside>
 
-      {/* Main Stage */}
-      <main className="main-stage">
-        {/* New topic form toggle */}
-        <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'flex-end' }}>
+      {/* ── Main Stage ── */}
+      <main className="main-stage" ref={threadRef}>
+
+        {/* Action Bar */}
+        <div className="forum-action-bar">
+          {activeTopic && (
+            <button className="forum-back-btn" onClick={() => { setActiveTopic(null); setShowNewForm(false); }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+              All Topics
+            </button>
+          )}
+          <div style={{ flex: 1 }} />
           {isLoggedIn ? (
             <button
-              className="btn btn--primary"
-              style={{ fontSize: 12, padding: '6px 14px', fontFamily: 'var(--f-display)', letterSpacing: '0.05em' }}
-              onClick={() => setShowNewForm(v => !v)}
+              className={`forum-new-btn${showNewForm ? ' forum-new-btn--cancel' : ''}`}
+              onClick={() => { setShowNewForm(v => !v); setActiveTopic(null); }}
             >
-              {showNewForm ? 'Cancel' : '+ New Topic'}
+              {showNewForm ? '✕ Cancel' : '+ New Topic'}
             </button>
           ) : (
-            <Link
-              to={loginHref}
-              className="btn btn--primary"
-              style={{ fontSize: 12, padding: '6px 14px', fontFamily: 'var(--f-display)', letterSpacing: '0.05em', textDecoration: 'none' }}
-            >
+            <Link to={loginHref} className="forum-new-btn" style={{ textDecoration: 'none' }}>
               Sign In To Post
             </Link>
           )}
         </div>
 
+        {/* New Topic Form */}
         {showNewForm && isLoggedIn && (
-          <div className="form-panel" style={{ marginBottom: '1.25rem' }}>
-            <h2>Start a Discussion</h2>
+          <div className="forum-form-card">
+            <div className="forum-form-card__title">Start a Discussion</div>
             <form onSubmit={handleCreateTopic}>
-              <div className="form-group">
-                <label className="form-label">Category</label>
-                <select className="form-input" value={newCat} onChange={e => setNewCat(e.target.value)} style={{ cursor: 'pointer', maxWidth: '100%' }}>
-                  <option value="game">Games</option>
-                  <option value="player">Players</option>
-                  <option value="trade">Trade</option>
-                  <option value="chat">Chat</option>
-                </select>
+              <div className="forum-form-row">
+                <label className="forum-form-label">Category</label>
+                <div className="forum-cat-select-row">
+                  {[
+                    { value: 'game', label: 'Games' },
+                    { value: 'player', label: 'Players' },
+                    { value: 'trade', label: 'Trade' },
+                    { value: 'chat', label: 'Chat' },
+                  ].map(opt => (
+                    <button
+                      type="button"
+                      key={opt.value}
+                      className={`forum-cat-pick${newCat === opt.value ? ' active' : ''}`}
+                      style={newCat === opt.value ? { background: CAT_COLORS[opt.value]?.bg, color: CAT_COLORS[opt.value]?.color, borderColor: CAT_COLORS[opt.value]?.color } : {}}
+                      onClick={() => setNewCat(opt.value)}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Title <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(min. 5 chars)</span></label>
-                <input type="text" className="form-input" placeholder="What's on your mind?" maxLength={80} value={newTitle} onChange={e => setNewTitle(e.target.value)} />
-                <div className="char-counter" style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', marginTop: 3 }}>{newTitle.length} / 80</div>
+              <div className="forum-form-row">
+                <label className="forum-form-label">
+                  Title
+                  <span className="forum-form-hint">{newTitle.length}/80</span>
+                </label>
+                <input
+                  className="forum-form-input"
+                  placeholder="What's on your mind?"
+                  maxLength={80}
+                  value={newTitle}
+                  onChange={e => setNewTitle(e.target.value)}
+                />
               </div>
-              <div className="form-group">
-                <label className="form-label">Body <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(min. 10 chars)</span></label>
-                <textarea className="form-textarea" placeholder="Share your thoughts…" value={newBody} onChange={e => setNewBody(e.target.value)} />
-                <div className="char-counter" style={{ fontSize: 10, color: 'var(--text-muted)', textAlign: 'right', marginTop: 3 }}>{newBody.length} chars</div>
+              <div className="forum-form-row">
+                <label className="forum-form-label">
+                  Body
+                  <span className="forum-form-hint">{newBody.length} chars</span>
+                </label>
+                <textarea
+                  className="forum-form-textarea"
+                  placeholder="Share your thoughts in detail…"
+                  value={newBody}
+                  onChange={e => setNewBody(e.target.value)}
+                  rows={4}
+                />
               </div>
-              <div style={{ display: 'flex', gap: '.5rem' }}>
-                <button type="submit" className="btn btn--primary" disabled={submitting}>{submitting ? 'Posting…' : 'Post Topic'}</button>
-                <button type="button" className="btn btn--ghost" onClick={() => setShowNewForm(false)}>Cancel</button>
+              <div className="forum-form-actions">
+                <button type="submit" className="forum-submit-btn" disabled={submitting}>
+                  {submitting ? 'Posting…' : 'Post Topic'}
+                </button>
+                <button type="button" className="forum-cancel-btn" onClick={() => setShowNewForm(false)}>
+                  Cancel
+                </button>
               </div>
             </form>
           </div>
         )}
 
         {activeTopic ? (
-          <>
-            {/* Thread hero */}
-            <div className="thread-hero" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1.6rem', marginBottom: '1.25rem', position: 'relative', overflow: 'hidden' }}>
-              <div className="thread-hero__title">{activeTopic.title}</div>
-              <div className="thread-hero__meta">
+          /* ── Thread View ── */
+          <div className="forum-thread">
+            {/* Thread OP */}
+            <div className="forum-thread-op">
+              <div className="forum-thread-op__meta">
                 <CatBadge cat={activeTopic.category} />
-                <span>·</span>
-                <span>@{activeTopic.author_name || 'Anonymous'}</span>
-                <span>·</span>
-                <span>{timeAgo(activeTopic.created_at)}</span>
-                <span>·</span>
-                <span>{activeTopic.reply_count || 0} replies</span>
+                <span className="forum-thread-op__author">@{activeTopic.author_name || 'Anonymous'}</span>
+                <span className="forum-dot">·</span>
+                <span className="forum-thread-op__time">{timeAgo(activeTopic.created_at)}</span>
+                <span className="forum-dot">·</span>
+                <span className="forum-thread-op__count">{activeTopic.reply_count || 0} replies</span>
               </div>
-              <div className="thread-hero__body" style={{ whiteSpace: 'pre-wrap' }}>{activeTopic.body}</div>
+              <h2 className="forum-thread-op__title">{activeTopic.title}</h2>
+              <div className="forum-thread-op__body">{activeTopic.body}</div>
             </div>
 
             {/* Replies */}
-            <div style={{ marginBottom: 16 }}>
-              {threadLoading ? (
-                <div className="loading"><div className="loading__spinner" /></div>
-              ) : posts.length === 0 ? (
-                <div className="empty">No replies yet. Be first!</div>
-              ) : (
-                posts.map(p => (
+            <div className="forum-replies-header">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+              {posts.length} {posts.length === 1 ? 'REPLY' : 'REPLIES'}
+            </div>
+
+            {threadLoading ? (
+              <div className="loading" style={{ padding: 32 }}><div className="loading__spinner" /></div>
+            ) : posts.length === 0 ? (
+              <div className="forum-no-replies">
+                No replies yet — be the first to respond.
+              </div>
+            ) : (
+              <div className="forum-posts-list">
+                {posts.map((p, i) => (
                   <PostItem
                     key={p.id}
                     post={p}
                     currentUser={user}
                     onLike={handleLike}
                     onDislike={handleDislike}
+                    isOP={i === 0}
                   />
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
 
-            {/* Reply form */}
-            <div className="form-panel form-panel--blue" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1.4rem', position: 'relative', overflow: 'hidden' }}>
+            {/* Reply Box */}
+            <div className="forum-reply-box">
               {isLoggedIn ? (
                 <>
-                  <h3>Add Reply</h3>
+                  <div className="forum-reply-box__header">
+                    <AuthorAvatar name={user?.username} />
+                    <span className="forum-reply-box__name">@{user?.username}</span>
+                  </div>
                   <form onSubmit={handleReply}>
-                    <div className="form-group">
-                      <textarea
-                        className="form-textarea"
-                        placeholder="Share your thoughts…"
-                        value={replyText}
-                        onChange={e => setReplyText(e.target.value)}
-                        rows={3}
-                      />
+                    <textarea
+                      className="forum-reply-textarea"
+                      placeholder="Write your reply…"
+                      value={replyText}
+                      onChange={e => setReplyText(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="forum-reply-actions">
+                      <span className="forum-reply-hint">{replyText.length} chars</span>
+                      <button
+                        type="submit"
+                        className="forum-submit-btn"
+                        disabled={replySubmitting || !replyText.trim()}
+                      >
+                        {replySubmitting ? 'Posting…' : 'Post Reply'}
+                      </button>
                     </div>
-                    <button type="submit" className="btn btn--primary" disabled={replySubmitting || !replyText.trim()}>
-                      {replySubmitting ? 'Posting…' : 'Post Reply'}
-                    </button>
                   </form>
                 </>
               ) : (
-                <>
-                  <h3>Join The Conversation</h3>
-                  <div style={{ color: 'var(--text-sub)', lineHeight: 1.6, marginBottom: 12 }}>
-                    Sign in to reply, upvote strong takes, and start your own discussion threads.
+                <div className="forum-reply-cta">
+                  <div className="forum-reply-cta__text">
+                    Join the conversation — sign in to reply and upvote.
                   </div>
-                  <Link to={loginHref} className="btn btn--primary" style={{ display: 'inline-flex', textDecoration: 'none' }}>
+                  <Link to={loginHref} className="forum-submit-btn" style={{ textDecoration: 'none' }}>
                     Sign In To Reply
                   </Link>
-                </>
+                </div>
               )}
             </div>
-          </>
+          </div>
         ) : (
-          /* Welcome + TOTD */
-          <>
-            {/* Topic of the Day */}
-            <div className="totd-card" style={{ position: 'relative', background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '1.8rem 1.6rem 1.4rem', marginBottom: '1.25rem', overflow: 'hidden' }}>
-              <div className="totd-eyebrow">TOPIC OF THE DAY</div>
-              <div className="totd-date">{new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
-              <div className="totd-question">{todayTopic.q}</div>
-              <div className="totd-sub">{todayTopic.sub}</div>
-              <div className="totd-stats">
-                <div className="totd-stat"><strong>{topics.filter(t => t.category === 'totd').length || 0}</strong> TOTD posts today</div>
-                <div className="totd-stat"><strong>{topics.length}</strong> total topics</div>
+          /* ── Empty / Home State ── */
+          <div className="forum-home">
+            {/* TOTD Banner */}
+            <div className="forum-totd-banner">
+              <div className="forum-totd-banner__eyebrow">
+                <span className="forum-totd-fire">🔥</span>
+                TOPIC OF THE DAY
+              </div>
+              <div className="forum-totd-banner__date">
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </div>
+              <div className="forum-totd-banner__question">{todayTopic.q}</div>
+              <div className="forum-totd-banner__sub">{todayTopic.sub}</div>
+              <div className="forum-totd-banner__footer">
+                <div className="forum-totd-stat">
+                  <strong>{topics.filter(t => t.category === 'totd').length}</strong>
+                  <span>TOTD posts</span>
+                </div>
+                <div className="forum-totd-stat">
+                  <strong>{topics.length}</strong>
+                  <span>total topics</span>
+                </div>
+                <button
+                  className="forum-totd-join-btn"
+                  onClick={() => { setNewCat('totd'); setShowNewForm(true); }}
+                >
+                  {isLoggedIn ? 'Add Your Take →' : 'View Discussion →'}
+                </button>
               </div>
             </div>
-            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: 48, marginBottom: 12, opacity: 0.3 }}>💬</div>
-              <div style={{ fontFamily: 'var(--f-display)', fontSize: 24, marginBottom: 8 }}>Fan Forum</div>
-              <div style={{ fontSize: 14 }}>Select a topic from the left to read and reply</div>
-            </div>
-          </>
+
+            {/* Hot Topics Grid */}
+            {hotTopics.length > 0 && (
+              <div className="forum-hot-section">
+                <div className="forum-section-label">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                    <polyline points="17 6 23 6 23 12"/>
+                  </svg>
+                  TRENDING
+                </div>
+                <div className="forum-hot-grid">
+                  {hotTopics.map(t => (
+                    <div key={t.id} className="forum-hot-card" onClick={() => openTopic(t)}>
+                      <CatBadge cat={t.category} />
+                      <div className="forum-hot-card__title">{t.title}</div>
+                      <div className="forum-hot-card__meta">
+                        <span>@{t.author_name || 'Anonymous'}</span>
+                        <span className="forum-hot-card__replies">
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                          </svg>
+                          {t.reply_count || 0}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {hotTopics.length === 0 && !topicsLoading && (
+              <div className="forum-welcome">
+                <div className="forum-welcome__icon">💬</div>
+                <div className="forum-welcome__title">Fan Forum</div>
+                <div className="forum-welcome__sub">Select a topic from the left to read and reply</div>
+                {isLoggedIn && (
+                  <button className="forum-new-btn" style={{ marginTop: 16 }} onClick={() => setShowNewForm(true)}>
+                    + Start a Discussion
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         )}
 
-        <footer style={{ marginTop: '2rem', padding: '1rem 0', borderTop: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '.72rem', fontFamily: 'var(--f-display)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-          Game Pulse · Data for reference only
+        <footer className="forum-footer">
+          Game Pulse · Fan Forum · Data for reference only
         </footer>
       </main>
 
-      {/* Panel Social */}
+      {/* ── Right Panel ── */}
       <aside className="panel-social">
+        {/* TOTD Widget */}
         <div className="rp-section">
           <div className="rp-head">Topic of the Day</div>
-          <div
-            className="totd-rp"
-            style={{ background: 'linear-gradient(135deg, rgba(255,180,0,.06), rgba(230,0,0,.04))', border: '1px solid rgba(255,180,0,.2)', padding: 12, cursor: 'pointer' }}
-            onClick={() => setActiveTopic(null)}
-          >
-            <div className="totd-rp__label">Today's Discussion</div>
-            <div className="totd-rp__q">{todayTopic.q}</div>
-            <div className="totd-rp__cta">Join Discussion →</div>
+          <div className="forum-totd-widget" onClick={() => setActiveTopic(null)}>
+            <div className="forum-totd-widget__q">{todayTopic.q}</div>
+            <div className="forum-totd-widget__cta">Join Discussion →</div>
           </div>
         </div>
+
+        {/* Community Stats */}
         <div className="rp-section">
-          <div className="rp-head">Quick Links</div>
-          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: 12, color: 'var(--text-sub)', textDecoration: 'none', borderBottom: '1px solid var(--border)' }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/></svg>
+          <div className="rp-head">Community</div>
+          <div className="forum-stats-grid">
+            <div className="forum-stat-box">
+              <div className="forum-stat-box__num">{topics.length}</div>
+              <div className="forum-stat-box__label">Topics</div>
+            </div>
+            <div className="forum-stat-box">
+              <div className="forum-stat-box__num">{topics.reduce((a, t) => a + (t.reply_count || 0), 0)}</div>
+              <div className="forum-stat-box__label">Replies</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Categories */}
+        <div className="rp-section">
+          <div className="rp-head">Browse by Category</div>
+          <div className="forum-cat-list">
+            {CAT_TABS.filter(t => t.key !== 'all').map(t => {
+              const count = topics.filter(tp => tp.category === t.key).length;
+              const c = CAT_COLORS[t.key];
+              return (
+                <button
+                  key={t.key}
+                  className="forum-cat-list-item"
+                  onClick={() => { setCat(t.key); setActiveTopic(null); }}
+                  style={cat === t.key ? { borderLeftColor: c?.color, background: c?.bg } : {}}
+                >
+                  <span style={{ color: c?.color }}>{t.label}</span>
+                  <span className="forum-cat-list-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Rules */}
+        <div className="rp-section">
+          <div className="rp-head">Community Rules</div>
+          <div className="forum-rules">
+            {['Be respectful to all fans', 'No spam or self-promotion', 'Stay on topic', 'Have fun and enjoy!'].map((r, i) => (
+              <div key={i} className="forum-rule">
+                <span className="forum-rule__num">{i + 1}</span>
+                {r}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick link */}
+        <div className="rp-section">
+          <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: 12, color: 'var(--text-sub)', textDecoration: 'none' }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9.5z"/>
+            </svg>
             Today's Games
           </Link>
-          {!isLoggedIn && (
-            <Link to={loginHref} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 0', fontSize: 12, color: 'var(--text-sub)', textDecoration: 'none', borderBottom: '1px solid var(--border)' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M21 14v7H3V3h7"/></svg>
-              Sign In To Participate
-            </Link>
-          )}
-        </div>
-        <div className="rp-section">
-          <div className="rp-head">Forum Rules</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <div>· Be respectful to all fans</div>
-            <div>· No spam or self-promotion</div>
-            <div>· Keep it basketball related</div>
-            <div>· Have fun and enjoy!</div>
-          </div>
         </div>
       </aside>
 
