@@ -243,7 +243,6 @@
       </div>
       <button class="btn active" id="btnShots" style="margin-left:8px">SHOTS</button>
       <span class="count" id="count">0 / 0</span>
-      <button class="btn" id="btnLive" style="margin-left:8px;border-color:rgba(255,50,80,0.4);color:#ff3355">⬤ LIVE</button>
     </div>
     <div class="legend" id="legend"></div>
   </div>
@@ -3251,11 +3250,6 @@ async function pollLive() {
 
 function startLive() {
   liveMode = true;
-  const btn = document.getElementById('btnLive');
-  btn.textContent = '⬤ LIVE ON';
-  btn.style.background = '#f04';
-  btn.style.color = '#fff';
-  btn.style.borderColor = '#f04';
   stopPlay(); // stop replay mode
 
   // Set lastSeqNum to current plays so we only get NEW plays
@@ -3271,14 +3265,7 @@ function startLive() {
 function stopLive() {
   liveMode = false;
   clearInterval(livePollTimer);
-  const btn = document.getElementById('btnLive');
-  btn.textContent = '⬤ LIVE';
-  btn.style.background = '';
-  btn.style.color = '#f04';
-  btn.style.borderColor = '#f04';
 }
-
-document.getElementById('btnLive').onclick = () => liveMode ? stopLive() : startLive();
 
 document.getElementById('btnShots').onclick = function() {
   shotGroup.visible = !shotGroup.visible;
@@ -3363,6 +3350,7 @@ async function loadGame() {
     }
 
     plays    = (json.plays || [])
+
       .filter(p => p.period?.number)
       .sort((a, b) => (parseInt(a.sequenceNumber,10)||0) - (parseInt(b.sequenceNumber,10)||0));
     playhead = plays.length - 1;
@@ -3384,6 +3372,9 @@ async function loadGame() {
     document.getElementById('legend').innerHTML = '';
 
     renderFrame();
+
+    // Auto-start live polling if game is in progress
+    if (st?.state === 'in') startLive();
   } catch(e) {
     document.getElementById('tlList').innerHTML = '<div class="tl-item active" style="color:#f44">Failed to load. Check console.</div>';
     console.error(e);
