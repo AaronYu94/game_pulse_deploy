@@ -237,6 +237,7 @@
         <button class="btn cam-btn" data-cam="top">TOP</button>
         <button class="btn cam-btn" data-cam="base">BASE</button>
       </div>
+      <button class="btn active" id="btnShots" style="margin-left:8px">SHOTS</button>
       <span class="count" id="count">0 / 0</span>
       <button class="btn" id="btnLive" style="margin-left:8px;border-color:rgba(255,50,80,0.4);color:#ff3355">⬤ LIVE</button>
     </div>
@@ -3322,6 +3323,12 @@ function stopLive() {
 }
 
 document.getElementById('btnLive').onclick = () => liveMode ? stopLive() : startLive();
+
+document.getElementById('btnShots').onclick = function() {
+  shotGroup.visible = !shotGroup.visible;
+  this.classList.toggle('active', shotGroup.visible);
+  render();
+};
 
 // ── Load game data ────────────────────────────────────────────────────
 function loadRosterMap(json) {
