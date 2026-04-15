@@ -1244,8 +1244,6 @@ buildStadiumShell();
 
   // ── 5. Scroll animation ───────────────────────────────────────────
   let ledSpeed = 0.0007;
-  let ledPaused = false;
-  let ledLastPause = false;
 
   // ── LED Flash: override ribbon with scoring event text ───────────────
   let ledFlashUntil = 0;
@@ -1282,9 +1280,6 @@ buildStadiumShell();
   };
 
   window._updateLEDRibbons = function(now, dt) {
-    const paused = !isPlaying && !liveMode;
-    if (paused !== ledLastPause) { ledLastPause = paused; ledPaused = paused; }
-
     if (now < ledFlashUntil) {
       ledSpeed += (0.003 - ledSpeed) * 0.05;
     } else {
@@ -1293,8 +1288,7 @@ buildStadiumShell();
         drawLEDText();
         ledScrollTex.needsUpdate = true;
       }
-      const target = ledPaused ? 0.00006 : 0.0007;
-      ledSpeed += (target - ledSpeed) * 0.06;
+      ledSpeed += (0.0007 - ledSpeed) * 0.06;
     }
 
     ledScrollTex.offset.x += ledSpeed;
